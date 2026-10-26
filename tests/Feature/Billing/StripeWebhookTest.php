@@ -26,6 +26,7 @@ use App\Notifications\PaymentFailedNotification;
 use App\Services\Billing\HostedWorkspaceAccess;
 use App\Support\CurrentWorkspace;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -1065,6 +1066,22 @@ it('replaces an older managed subscription for a workspace that once paid for Pr
     expect(Subscription::query()->where('stripe_id', 'sub_managed_old')->sole()->ended())->toBeTrue()
         ->and($recorder->countFor('DELETE /v1/subscriptions/sub_managed_old'))->toBe(1)
         ->and($workspace->refresh()->plan)->toBe(Plan::Enterprise);
+});
+
+it('grants nothing when a concurrent delivery switched the plan on first', function (): void {
+    $workspace = proWorkspaceAwaitingManagedPayment();
+    stripeManagedSwitch($workspace);
+
+    Workspace::retrieved(function (Workspace $retrieved) use ($workspace): void {
+        if ($retrieved->is($workspace) && DB::transactionLevel() > 1) {
+            Subscription::query()->where('stripe_id', 'sub_managed_1')->update(['type' => SubscriptionType::Managed->value]);
+        }
+    });
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Pro)
+        ->and(resetRowsFor($workspace))->toBe(0);
 });
 
 it('grants and refunds once when Stripe redelivers the paid invoice', function (): void {
