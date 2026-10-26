@@ -422,6 +422,25 @@ it('shows enterprise manual state without upgrade actions', function (): void {
         ->assertDontSee(__('billing.upgrade.button'));
 });
 
+it('states a Concierge plan as managed once, without repeating the heading in a body', function (): void {
+    [, $workspace] = billingPageOwner();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+
+    $html = livewire(Billing::class)->html();
+
+    expect(substr_count($html, __('billing.managed.title')))->toBe(1)
+        ->and($html)->not->toContain(__('billing.enterprise.body'));
+});
+
+it('keeps the Enterprise title and body on an Enterprise plan', function (): void {
+    [, $workspace] = billingPageOwner();
+    $workspace->forceFill(['plan' => Plan::Enterprise])->save();
+
+    livewire(Billing::class)
+        ->assertSee(__('billing.enterprise.title'))
+        ->assertSee(__('billing.enterprise.body'));
+});
+
 it('shows Concierge as a managed plan with its allowance and no upgrade actions', function (): void {
     [, $workspace] = billingPageOwner();
     $workspace->forceFill(['plan' => Plan::Concierge])->save();
