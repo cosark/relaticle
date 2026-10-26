@@ -507,6 +507,15 @@ it('reads the withdraw visibility from the loaded subscriptions instead of one q
     expect($manyWorkspaces)->toBe($fewWorkspaces);
 });
 
+it('offers withdraw on the workspace page right after the invoice is sent', function (): void {
+    $workspace = managedPlanWorkspace();
+
+    livewire(ViewWorkspace::class, ['record' => $workspace->getRouteKey()])
+        ->callAction('startManagedPlan', ['plan' => Plan::Concierge->value, 'amount' => 708])
+        ->assertHasNoActionErrors()
+        ->assertActionVisible('withdrawManagedInvoice');
+});
+
 it('lets the sysadmin start again after withdrawing', function (): void {
     $workspace = managedPlanWorkspace();
     unpaidManagedSubscription($workspace);

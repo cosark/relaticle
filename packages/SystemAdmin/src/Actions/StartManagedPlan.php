@@ -25,6 +25,8 @@ final readonly class StartManagedPlan
 
         $subscription = $this->createInvoicedSubscription($workspace, $plan, $yearlyAmount);
 
+        $workspace->unsetRelation('subscriptions');
+
         $invoice = Cashier::stripe()->invoices->sendInvoice($this->latestInvoiceId($subscription));
 
         if (filled($billingEmail)) {
