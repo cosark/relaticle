@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Billing;
 
 use App\Enums\Plan;
+use App\Enums\StripeSubscriptionStatus;
 use App\Enums\SubscriptionType;
 use App\Models\Workspace;
 use Carbon\CarbonImmutable;
@@ -108,7 +109,7 @@ final readonly class ActivateManagedPlan
             ->where('created_at', '<=', $paidAt)
             ->with('owner')
             ->get()
-            ->filter(fn (Subscription $subscription): bool => $subscription->valid());
+            ->filter(fn (Subscription $subscription): bool => $subscription->valid() || $subscription->stripe_status === StripeSubscriptionStatus::Unpaid->value);
 
         foreach ($replaced as $subscription) {
             $this->cancelWithRefund->execute($subscription, "managed-switch-{$invoiceId}-{$subscription->stripe_id}", $paidAt);
