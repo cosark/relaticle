@@ -6,6 +6,7 @@ namespace App\Enums;
 
 use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
+use Illuminate\Support\Arr;
 
 enum Plan: string implements HasColor, HasLabel
 {
@@ -36,13 +37,7 @@ enum Plan: string implements HasColor, HasLabel
             return null;
         }
 
-        foreach (self::cases() as $plan) {
-            if ($plan->stripeProduct() === $productId) {
-                return $plan;
-            }
-        }
-
-        return null;
+        return Arr::first(self::cases(), fn (self $plan): bool => $plan->stripeProduct() === $productId);
     }
 
     /**
