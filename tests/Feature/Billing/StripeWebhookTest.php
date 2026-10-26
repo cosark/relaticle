@@ -942,6 +942,17 @@ it('switches a Pro trial with no refund', function (): void {
         ->and($workspace->refresh()->plan)->toBe(Plan::Concierge);
 });
 
+it('grants nothing for a managed product subscription created outside Start managed plan', function (): void {
+    $workspace = stripeBillingWorkspace();
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'created', overrides: [
+        'metadata' => ['workspace_id' => (string) $workspace->getKey()],
+    ]))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Free)
+        ->and(Subscription::query()->where('stripe_id', 'sub_managed_1')->sole()->type)->toBe('default');
+});
+
 it('ends the trial when the managed invoice is paid, so a cancelled managed plan does not stay on for free', function (): void {
     Mail::fake();
     $workspace = stripeBillingWorkspace();

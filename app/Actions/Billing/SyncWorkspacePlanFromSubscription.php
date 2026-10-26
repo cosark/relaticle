@@ -64,10 +64,13 @@ final readonly class SyncWorkspacePlanFromSubscription
 
     private function subscriptionPlan(Subscription $subscription): ?Plan
     {
+        if (! in_array($subscription->type, [SubscriptionType::Managed->value, SubscriptionType::ManagedPending->value], true)) {
+            return Plan::fromStripePrice($subscription->stripe_price);
+        }
+
         $product = $subscription->items()->value('stripe_product');
 
-        return Plan::fromStripePrice($subscription->stripe_price)
-            ?? Plan::fromStripeProduct(is_string($product) ? $product : null);
+        return Plan::fromStripeProduct(is_string($product) ? $product : null);
     }
 
     private function endedMail(Workspace $workspace, Plan $endedPlan): ProEndedMail
