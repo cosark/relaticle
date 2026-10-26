@@ -22,17 +22,14 @@ final readonly class StartManagedPlan
     {
         abort_unless(Gate::forUser($admin)->allows('manageManagedPlan', $workspace), 403);
 
-        $lock = Cache::lock("managed-plan-start:{$workspace->getKey()}", 60);
+        $subscription = Cache::lock("managed-plan-start:{$workspace->getKey()}", 60)
+            ->get(fn (): Subscription => $this->start($workspace, $plan, $yearlyAmount, $billingEmail));
 
-        if (! $lock->get()) {
+        if (! $subscription instanceof Subscription) {
             $this->refuse('Another managed plan is being started for this workspace. Reload the page.');
         }
 
-        try {
-            return $this->start($workspace, $plan, $yearlyAmount, $billingEmail);
-        } finally {
-            $lock->release();
-        }
+        return $subscription;
     }
 
     private function start(Workspace $workspace, Plan $plan, int $yearlyAmount, ?string $billingEmail): Subscription
