@@ -9,6 +9,7 @@ use App\Models\Workspace;
 use App\Services\Billing\HostedWorkspaceAccess;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -16,6 +17,7 @@ use Laravel\Cashier\Subscription;
 use Laravel\Pennant\Feature;
 use Livewire\Features\SupportTesting\Testable;
 use Relaticle\SystemAdmin\Actions\StartManagedPlan;
+use Relaticle\SystemAdmin\Actions\WithdrawManagedInvoice;
 use Relaticle\SystemAdmin\Enums\SystemAdministratorRole;
 use Relaticle\SystemAdmin\Filament\Resources\WorkspaceResource\Pages\ListWorkspaces;
 use Relaticle\SystemAdmin\Filament\Resources\WorkspaceResource\Pages\ViewWorkspace;
@@ -26,7 +28,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Helpers\OverviewData;
 use Tests\Helpers\StripeRecorder;
 
-mutates(StartManagedPlan::class, ManagedPlan::class, ManagedPlanInvoiceMail::class);
+mutates(StartManagedPlan::class, WithdrawManagedInvoice::class, ManagedPlan::class, ManagedPlanInvoiceMail::class);
 
 const HOSTED_INVOICE_URL = 'https://invoice.stripe.com/i/acct_test/test_managed';
 
@@ -329,4 +331,152 @@ it('shows the action on the workspace page', function (): void {
 
     livewire(ViewWorkspace::class, ['record' => $workspace->getRouteKey()])
         ->assertActionVisible('startManagedPlan');
+});
+
+function unpaidManagedSubscription(Workspace $workspace, string $status = 'incomplete'): Subscription
+{
+    return Subscription::factory()->create([
+        'workspace_id' => $workspace->getKey(),
+        'type' => SubscriptionType::ManagedPending->value,
+        'stripe_id' => 'sub_managed_test',
+        'stripe_status' => $status,
+    ]);
+}
+
+function withLatestInvoiceStatus(StripeRecorder $stripe, string $status): void
+{
+    $stripe->respondTo('/v1/subscriptions', [
+        ...managedSubscriptionBody(),
+        'latest_invoice' => ['id' => 'in_managed_test', 'object' => 'invoice', 'status' => $status],
+    ]);
+}
+
+function withdrawManagedInvoiceFor(Workspace $workspace): Testable
+{
+    return livewire(ListWorkspaces::class)
+        ->callAction(TestAction::make('withdrawManagedInvoice')->table($workspace));
+}
+
+it('voids the unpaid invoice and cancels its subscription', function (): void {
+    $workspace = managedPlanWorkspace();
+    $subscription = unpaidManagedSubscription($workspace);
+    withLatestInvoiceStatus($this->stripe, 'open');
+    $this->stripe->respondTo('POST /v1/invoices/in_managed_test/void', ['id' => 'in_managed_test', 'object' => 'invoice', 'status' => 'void']);
+
+    withdrawManagedInvoiceFor($workspace)->assertHasNoActionErrors()->assertNotified('Invoice withdrawn');
+
+    expect($this->stripe->countFor('POST /v1/invoices/in_managed_test/void'))->toBe(1)
+        ->and($this->stripe->countFor('DELETE /v1/subscriptions/sub_managed_test'))->toBe(1)
+        ->and($subscription->refresh()->stripe_status)->toBe('canceled')
+        ->and($subscription->ends_at)->not->toBeNull()
+        ->and($workspace->refresh()->plan)->toBe(Plan::Free);
+});
+
+it('withdraws an incomplete pending invoice', function (): void {
+    $workspace = managedPlanWorkspace();
+    unpaidManagedSubscription($workspace, 'incomplete');
+    withLatestInvoiceStatus($this->stripe, 'open');
+
+    withdrawManagedInvoiceFor($workspace)->assertNotified('Invoice withdrawn');
+
+    expect($this->stripe->countFor('POST /v1/invoices/in_managed_test/void'))->toBe(1)
+        ->and($workspace->subscription(SubscriptionType::ManagedPending->value)?->stripe_status)->toBe('canceled');
+});
+
+it('refuses to withdraw an invoice that is already paid', function (): void {
+    $workspace = managedPlanWorkspace();
+    $subscription = unpaidManagedSubscription($workspace, 'active');
+    withLatestInvoiceStatus($this->stripe, 'paid');
+
+    withdrawManagedInvoiceFor($workspace)->assertNotified(
+        Notification::make()
+            ->danger()
+            ->title('Invoice not withdrawn')
+            ->body('The invoice is already paid. The plan switches on when Stripe confirms the payment.'),
+    );
+
+    expect($this->stripe->countFor('POST /v1/invoices/in_managed_test/void'))->toBe(0)
+        ->and($this->stripe->countFor('DELETE /v1/subscriptions/sub_managed_test'))->toBe(0)
+        ->and($subscription->refresh()->stripe_status)->toBe('active');
+});
+
+it('cancels without voiding again when a retry finds the invoice already void', function (): void {
+    $workspace = managedPlanWorkspace();
+    unpaidManagedSubscription($workspace);
+    withLatestInvoiceStatus($this->stripe, 'void');
+
+    withdrawManagedInvoiceFor($workspace)->assertNotified('Invoice withdrawn');
+
+    expect($this->stripe->countFor('POST /v1/invoices/in_managed_test/void'))->toBe(0)
+        ->and($this->stripe->countFor('DELETE /v1/subscriptions/sub_managed_test'))->toBe(1);
+});
+
+it('hides withdraw when no managed invoice is waiting', function (?string $status): void {
+    $workspace = managedPlanWorkspace();
+
+    if ($status !== null) {
+        unpaidManagedSubscription($workspace, $status);
+    }
+
+    livewire(ListWorkspaces::class)
+        ->assertActionHidden(TestAction::make('withdrawManagedInvoice')->table($workspace));
+
+    livewire(ViewWorkspace::class, ['record' => $workspace->getRouteKey()])
+        ->assertActionHidden('withdrawManagedInvoice');
+})->with([null, 'canceled', 'incomplete_expired']);
+
+it('shows withdraw while a managed invoice is waiting', function (): void {
+    $workspace = managedPlanWorkspace();
+    unpaidManagedSubscription($workspace);
+
+    livewire(ListWorkspaces::class)
+        ->assertActionVisible(TestAction::make('withdrawManagedInvoice')->table($workspace));
+
+    livewire(ViewWorkspace::class, ['record' => $workspace->getRouteKey()])
+        ->assertActionVisible('withdrawManagedInvoice');
+});
+
+it('lets the sysadmin start again after withdrawing', function (): void {
+    $workspace = managedPlanWorkspace();
+    unpaidManagedSubscription($workspace);
+    withLatestInvoiceStatus($this->stripe, 'open');
+
+    startManagedPlanFor($workspace, ['plan' => Plan::Concierge->value, 'amount' => 708])
+        ->assertHasActionErrors(['plan']);
+
+    withdrawManagedInvoiceFor($workspace)->assertNotified('Invoice withdrawn');
+
+    startManagedPlanFor($workspace->refresh(), ['plan' => Plan::Concierge->value, 'amount' => 708])
+        ->assertHasNoActionErrors();
+
+    expect(subscriptionRequests($this->stripe))->toBe(1);
+});
+
+it('refuses to withdraw when no managed invoice is waiting', function (): void {
+    $administrator = SystemAdministrator::factory()->create();
+
+    expect(fn () => resolve(WithdrawManagedInvoice::class)->execute($administrator, managedPlanWorkspace()))
+        ->toThrow(ValidationException::class);
+
+    expect($this->stripe->requests)->toBeEmpty();
+});
+
+it('forbids a sysadmin without customer access from withdrawing directly', function (): void {
+    $administrator = SystemAdministrator::factory()->create(['role' => SystemAdministratorRole::Administrator]);
+    $workspace = managedPlanWorkspace();
+    unpaidManagedSubscription($workspace);
+
+    expect(fn () => resolve(WithdrawManagedInvoice::class)->execute($administrator, $workspace))
+        ->toThrow(HttpException::class);
+
+    expect($this->stripe->requests)->toBeEmpty();
+});
+
+it('hides withdraw from a sysadmin who cannot manage customer access', function (): void {
+    $this->actingAs(SystemAdministrator::factory()->create(['role' => SystemAdministratorRole::Administrator]), 'sysadmin');
+    $workspace = managedPlanWorkspace();
+    unpaidManagedSubscription($workspace);
+
+    livewire(ListWorkspaces::class)
+        ->assertActionHidden(TestAction::make('withdrawManagedInvoice')->table($workspace));
 });

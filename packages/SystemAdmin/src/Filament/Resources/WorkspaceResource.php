@@ -355,6 +355,7 @@ final class WorkspaceResource extends Resource
                 ExtendTrial::action(),
                 EndTrial::action(),
                 ManagedPlan::startAction(),
+                ManagedPlan::withdrawAction(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

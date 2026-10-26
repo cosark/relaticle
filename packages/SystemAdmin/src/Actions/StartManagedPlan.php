@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Relaticle\SystemAdmin\Actions;
 
 use App\Enums\Plan;
-use App\Enums\StripeSubscriptionStatus;
 use App\Enums\SubscriptionType;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Gate;
@@ -53,12 +52,7 @@ final readonly class StartManagedPlan
             $this->refuse('The workspace has no owner to send the invoice to.');
         }
 
-        $hasUnpaidInvoice = $workspace->subscriptions()
-            ->where('type', SubscriptionType::ManagedPending->value)
-            ->whereNotIn('stripe_status', [StripeSubscriptionStatus::Canceled->value, StripeSubscriptionStatus::IncompleteExpired->value])
-            ->exists();
-
-        if ($hasUnpaidInvoice) {
+        if ($workspace->pendingManagedSubscription() instanceof Subscription) {
             $this->refuse('Another managed invoice is still unpaid. Withdraw it first.');
         }
 

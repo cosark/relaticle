@@ -25,6 +25,7 @@ final class ViewWorkspace extends ViewRecord
             ExtendTrial::action(),
             EndTrial::action(),
             ManagedPlan::startAction(),
+            ManagedPlan::withdrawAction(),
             EditAction::make()->action(null),
         ];
     }

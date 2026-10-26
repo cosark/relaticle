@@ -13,7 +13,9 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
+use Laravel\Cashier\Subscription;
 use Relaticle\SystemAdmin\Actions\StartManagedPlan;
+use Relaticle\SystemAdmin\Actions\WithdrawManagedInvoice;
 use Relaticle\SystemAdmin\Models\SystemAdministrator;
 
 final class ManagedPlan
@@ -65,6 +67,39 @@ final class ManagedPlan
                 }
 
                 Notification::make()->title('Invoice sent')->success()->send();
+            });
+    }
+
+    public static function withdrawAction(): Action
+    {
+        return Action::make('withdrawManagedInvoice')
+            ->label('Withdraw managed invoice')
+            ->icon('heroicon-o-x-circle')
+            ->color('danger')
+            ->authorize('manageManagedPlan')
+            ->visible(fn (Workspace $record): bool => $record->pendingManagedSubscription() instanceof Subscription)
+            ->requiresConfirmation()
+            ->modalHeading('Withdraw the managed invoice?')
+            ->modalDescription("Voids the unpaid invoice and cancels the subscription. The workspace's plan does not change.")
+            ->modalSubmitActionLabel('Withdraw invoice')
+            ->action(function (Workspace $record): void {
+                $administrator = auth('sysadmin')->user();
+
+                abort_unless($administrator instanceof SystemAdministrator, 403);
+
+                try {
+                    resolve(WithdrawManagedInvoice::class)->execute($administrator, $record);
+                } catch (ValidationException $exception) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Invoice not withdrawn')
+                        ->body(Arr::first(Arr::flatten($exception->errors())))
+                        ->send();
+
+                    return;
+                }
+
+                Notification::make()->title('Invoice withdrawn')->success()->send();
             });
     }
 

@@ -9,6 +9,8 @@ use App\Enums\MediaCollection;
 use App\Enums\OnboardingReferralSource;
 use App\Enums\OnboardingUseCase;
 use App\Enums\Plan;
+use App\Enums\StripeSubscriptionStatus;
+use App\Enums\SubscriptionType;
 use App\Enums\WorkspaceRole;
 use App\Enums\WorkspaceSetupStep;
 use App\Events\WorkspaceCreated;
@@ -408,6 +410,16 @@ final class Workspace extends Model implements HasAvatar, HasMedia, Onboardable
                 ['created_at' => 'MAX', 'id' => 'MAX'],
                 fn (Builder $query): Builder => $query->where('type', 'default'),
             );
+    }
+
+    public function pendingManagedSubscription(): ?Subscription
+    {
+        return Subscription::query()
+            ->where($this->getForeignKey(), $this->getKey())
+            ->where('type', SubscriptionType::ManagedPending->value)
+            ->whereNotIn('stripe_status', [StripeSubscriptionStatus::Canceled->value, StripeSubscriptionStatus::IncompleteExpired->value])
+            ->latest()
+            ->first();
     }
 
     /**
