@@ -88,13 +88,13 @@ return [
             'pro_yearly' => env('STRIPE_PRICE_PRO_YEARLY'),
         ],
         'products' => [
-            'concierge' => env('STRIPE_PRODUCT_CONCIERGE'),
-            'enterprise' => env('STRIPE_PRODUCT_ENTERPRISE'),
+            'concierge' => env('STRIPE_PRODUCT_CONCIERGE') ?: null,
+            'enterprise' => env('STRIPE_PRODUCT_ENTERPRISE') ?: null,
         ],
         'portal_configurations' => [
-            'managed' => env('STRIPE_PORTAL_CONFIGURATION_MANAGED'),
+            'managed' => env('STRIPE_PORTAL_CONFIGURATION_MANAGED') ?: null,
         ],
-        'managed_days_until_due' => (int) env('STRIPE_MANAGED_DAYS_UNTIL_DUE', 30),
+        'managed_days_until_due' => (int) (env('STRIPE_MANAGED_DAYS_UNTIL_DUE') ?: 30),
         'credit_packs' => [
             'small' => ['price' => env('STRIPE_PRICE_CREDITS_1K'), 'credits' => 1_000],
             'large' => ['price' => env('STRIPE_PRICE_CREDITS_5K'), 'credits' => 5_000],

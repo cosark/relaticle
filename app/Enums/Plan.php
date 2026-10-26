@@ -162,14 +162,11 @@ enum Plan: string implements HasColor, HasLabel
 
     public function stripeProduct(): ?string
     {
-        /** @var ?string $product */
-        $product = match ($this) {
+        return match ($this) {
             self::Free, self::Pro => null,
             self::Concierge => config('services.stripe.products.concierge'),
             self::Enterprise => config('services.stripe.products.enterprise'),
         };
-
-        return $product === '' ? null : $product;
     }
 
     public function defaultYearlyPrice(): ?int
