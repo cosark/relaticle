@@ -15,7 +15,7 @@
                 One CRM. Three ways to work.
             </h2>
             <p class="mt-5 text-base md:text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
-                Work in the app, <a href="{{ route('ai') }}" class="text-gray-700 dark:text-gray-300 underline decoration-gray-300 dark:decoration-gray-600 underline-offset-4 hover:text-primary dark:hover:text-primary-400 hover:decoration-primary transition-colors">ask {{ config('chat.assistant_name') }} in chat</a>, or connect your agents. Keep your team working from the same customer data.
+                Work in the app, <a href="{{ route('ai') }}" class="text-gray-700 dark:text-gray-300 underline decoration-gray-300 dark:decoration-gray-600 underline-offset-4 hover:text-primary dark:hover:text-primary-400 hover:decoration-primary transition-colors">ask {{ config('chat.assistant_name') }} in chat</a>, or connect your agents. Every company and next step stays in one place.
             </p>
         </div>
 
@@ -28,7 +28,7 @@
                     Connect your AI agents
                 </h3>
                 <p class="{{ $cardDesc }} max-w-md">
-                    Connect Claude, ChatGPT, or your own agent. They work from the same records your team does.
+                    Connect Claude, ChatGPT, or your own agent. They read and update the same records you do.
                 </p>
 
                 @include('home.partials.agent-network')
@@ -103,7 +103,7 @@
                         <x-ri-building-2-line class="w-3.5 h-3.5 text-primary dark:text-primary-400"/>
                         Company profiles
                     </h3>
-                    <p class="{{ $cardDesc }}">See every company in context. Keep its details, people, and deals together so your team can prepare for the next conversation.</p>
+                    <p class="{{ $cardDesc }}">See every company in context. Keep its details, people, and deals together so you can prepare for the next conversation.</p>
                 </div>
             </div>
 
@@ -196,7 +196,7 @@
                 <div class="absolute -bottom-8 -right-8 w-32 h-32 bg-primary/10 dark:bg-primary/15 rounded-full blur-2xl"></div>
                 <div class="relative">
                     <h3 class="{{ $cardTitle }}">Ready to start?</h3>
-                    <p class="{{ $cardDesc }}">Bring your team and agents onto the same CRM.</p>
+                    <p class="{{ $cardDesc }}">Put your companies, deals, and agents in one CRM.</p>
                 </div>
                 <div class="relative mt-5">
                     <x-marketing.button size="sm" href="{{ route('login') }}">

@@ -39,13 +39,6 @@ final class LocaleDiffCommand extends Command
     public function handle(): int
     {
         $locale = $this->argument('locale');
-
-        if (! is_string($locale)) {
-            $this->components->error('Pass one locale code, e.g. fr.');
-
-            return self::FAILURE;
-        }
-
         $root = $this->stringOption('lang-path') ?? lang_path();
         $format = $this->stringOption('format') ?? 'text';
         $updateSnapshot = (bool) $this->option('update-snapshot');

@@ -41,13 +41,13 @@
             {{-- ── Heading ── --}}
             <div class="text-center max-w-3xl">
                 <h1 class="font-display leading-[1.08] tracking-[-0.035em] text-balance">
-                    <span class="block text-2xl sm:text-[2.5rem] md:text-[3rem] lg:text-[3.25rem] font-normal text-gray-500 dark:text-gray-400">The CRM built for people</span>
-                    <span class="block text-[2.25rem] sm:text-5xl md:text-[3.5rem] lg:text-[3.75rem] font-extrabold text-gray-950 dark:text-white mt-1.5 sm:mt-2">and AI-powered work</span>
+                    <span class="block text-2xl sm:text-[2.5rem] md:text-[3rem] lg:text-[3.25rem] font-normal text-gray-500 dark:text-gray-400">The AI CRM for selling</span>
+                    <span class="block text-[2.25rem] sm:text-5xl md:text-[3.5rem] lg:text-[3.75rem] font-extrabold text-gray-950 dark:text-white mt-1.5 sm:mt-2">without a sales team</span>
                 </h1>
 
                 <p class="mt-6 sm:mt-7 text-[15px] sm:text-lg text-gray-500 dark:text-gray-400 max-w-xl mx-auto leading-relaxed tracking-[-0.01em]">
-                    Open-source, self-hosted, and human-first.<br class="hidden sm:block"/>
-                    Ask {{ config('chat.assistant_name') }}, the built-in AI assistant, or work from Claude and ChatGPT.
+                    For people who sell to a named list of companies.<br class="hidden sm:block"/>
+                    Work from Claude or ChatGPT, or ask {{ config('chat.assistant_name') }}, the built-in AI assistant.
                 </p>
             </div>
 

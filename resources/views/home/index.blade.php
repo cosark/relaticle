@@ -4,7 +4,7 @@
     $emailIntegrationActive = \Laravel\Pennant\Feature::active(\App\Features\EmailIntegration::class);
 
     $faqs = array_values(array_filter([
-        ['Is Relaticle production-ready?', 'Yes. Teams run Relaticle in production today. Every change passes an automated test suite before it ships, and each workspace\'s data stays separate behind role-based permissions.'],
+        ['Is Relaticle production-ready?', 'Yes. Relaticle Cloud runs in production today. Every change passes an automated test suite before it ships. Each workspace\'s data stays separate behind role-based permissions.'],
         ["What can {$assistantName} do?", "{$assistantName} is the AI assistant built into Relaticle. Ask it anything about your CRM and it works on your data: list and search records, draft follow-ups, summarize an opportunity, create a task, update or delete a record. @-mention any record (people, companies, opportunities, tasks, notes) to scope a question. Voice input and persistent, searchable history are included."],
         ["Can {$assistantName} create, change, or delete my CRM data without my approval?", "No. {$assistantName} proposes every create, update, and delete as a card showing exactly what will change. Nothing is written until you confirm it, and you can discard any proposal. An unanswered proposal expires after {$proposalExpiry}. Reading and searching need no approval."],
         ['Do external AI agents need my approval for each change?', "No. An agent you connect over MCP, such as Claude or ChatGPT, acts with your permissions in the one workspace you approved, and its changes apply directly. Only {$assistantName} adds a review step before every write."],
@@ -14,17 +14,17 @@
         $emailIntegrationActive
             ? ['Does Relaticle sync my email and calendar?', 'Yes. Connect a Google or Microsoft account and your email and meetings appear on the people, companies, and opportunities they involve. You can reply and send from the record, and you choose how much of each email your workspace can see.']
             : null,
-        ['How is Relaticle different from HubSpot or Salesforce?', "Relaticle is open source (AGPL-3.0), can be self-hosted so you own your data, ships with {$assistantName}, a built-in AI assistant, lets Claude, ChatGPT, or your own agent work in the same records over MCP, and has no per-seat pricing. It's designed for teams who want AI built in and AI integration without vendor lock-in."],
+        ['How is Relaticle different from HubSpot or Salesforce?', "Relaticle is open source (AGPL-3.0), can be self-hosted so you own your data, ships with {$assistantName}, a built-in AI assistant, lets Claude, ChatGPT, or your own agent work in the same records over MCP, and has no per-seat pricing. It's designed for people who want AI built in and AI integration without vendor lock-in."],
         ['How do I deploy Relaticle?', 'The quickest way is the hosted version at app.relaticle.com: sign up and start. To run it yourself, deploy with Docker Compose on your own server, and your data never leaves it.'],
         ['Can I customize the data model?', 'Yes. Add custom fields to any record: text, email, phone, currency, date, select, multi-select, and links to other records. You can encrypt sensitive fields. No code changes needed.'],
     ]));
 @endphp
 
 <x-guest-layout
-    :title="config('app.name') . ' - ' . __('CRM Built for People and AI-Powered Work')"
-    :description="'Open-source, self-hosted CRM. Ask '.$assistantName.', the built-in AI assistant, or connect Claude and ChatGPT to your records. Unlimited users. Free to self-host.'"
-    :ogTitle="config('app.name') . ' - ' . __('CRM Built for People and AI-Powered Work')"
-    :ogDescription="'Open-source CRM for teams and AI-powered work. Use the app, ask '.$assistantName.', or work from Claude and ChatGPT over MCP. Self-hosted, you own your data.'">
+    :title="config('app.name') . ' - ' . __('Open-Source AI CRM for Claude and ChatGPT')"
+    :description="'Open-source AI CRM for people who sell without a sales team. Work from Claude or ChatGPT, or ask '.$assistantName.', the built-in assistant. Free to self-host.'"
+    :ogTitle="config('app.name') . ' - ' . __('Open-Source AI CRM for Claude and ChatGPT')"
+    :ogDescription="'The open-source AI CRM for selling without a sales team. Work from Claude or ChatGPT, or ask '.$assistantName.', the built-in assistant.'">
     @push('header')
         @vite('resources/js/motion.js')
     @endpush
@@ -43,7 +43,7 @@
                 ->applicationCategory('BusinessApplication')
                 ->applicationSubCategory('CRM')
                 ->operatingSystem('Linux, macOS, Windows')
-                ->description("The open-source CRM built for people and AI-powered work. Self-hosted with {$assistantName}, a built-in AI assistant (with @-mentions, approval before every write, voice, and persistent history), plus an MCP server, REST API, and custom fields. Connect any external agent: Claude, ChatGPT, Gemini, or open-source models.")
+                ->description("The open-source AI CRM for selling without a sales team. Self-hosted with {$assistantName}, a built-in AI assistant (with @-mentions, approval before every write, voice, and persistent history), plus an MCP server, REST API, and custom fields. Connect any external agent: Claude, ChatGPT, Gemini, or open-source models.")
                 ->url(url('/'))
                 ->offers(\Spatie\SchemaOrg\Schema::offer()->name('Self-hosted')->description('Free to self-host under the AGPL-3.0 license.')->price('0')->priceCurrency('USD'))
                 ->setProperty('featureList', array_values(array_filter([

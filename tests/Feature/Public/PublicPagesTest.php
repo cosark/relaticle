@@ -71,6 +71,19 @@ describe('Home page', function () {
         expect($organization['logo'])->toEndWith('/web-app-manifest-512x512.png')
             ->and(file_exists(public_path('web-app-manifest-512x512.png')))->toBeTrue();
     });
+
+    it('declares the social card size the image file actually has on :path', function (string $path) {
+        $html = (string) $this->get($path)->assertStatus(200)->getContent();
+
+        preg_match('#<meta property="og:image" content="[^"]+/images/([^"?]+)\?v=\d+"/>#', $html, $image);
+        preg_match('#<meta property="og:image:width" content="(\d+)"/>#', $html, $width);
+        preg_match('#<meta property="og:image:height" content="(\d+)"/>#', $html, $height);
+
+        [$fileWidth, $fileHeight] = getimagesize(public_path("images/{$image[1]}"));
+
+        expect((int) $width[1])->toBe($fileWidth)
+            ->and((int) $height[1])->toBe($fileHeight);
+    })->with(['/', '/ai', '/self-hosted']);
 });
 
 describe('Legal pages', function () {

@@ -4,7 +4,7 @@
   </a>
 </p>
 
-<h1 align="center">The Open-Source CRM Built for People and AI-Powered Work</h1>
+<h1 align="center">The Open-Source AI CRM for Selling Without a Sales Team</h1>
 
 <p align="center">
   <a href="https://github.com/Relaticle/relaticle/actions/workflows/tests.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/Relaticle/relaticle/tests.yml?branch=main&style=for-the-badge&label=tests" alt="Tests"></a>
@@ -34,7 +34,7 @@
 
 Relaticle is a self-hosted CRM your AI agents can work in. Connect Claude, ChatGPT, or an open-source model over MCP to read, write, and analyze your CRM data. Custom fields, REST API, and multi-workspace isolation.
 
-**Perfect for:** Developer-led teams, AI-forward startups, and SMBs who want AI agent integration without vendor lock-in.
+**Built for:** people who sell to a named list of companies without a sales team. Connect Claude, ChatGPT, or your own agent to work in the CRM.
 
 **Core Strengths:**
 

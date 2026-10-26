@@ -198,7 +198,7 @@ it('links the product pages from page copy, not only from the sitewide nav', fun
         ->and($body)->toContain('href="'.route('selfHosted').'"');
 })->with(['/', '/pricing', '/compare/relaticle-vs-twenty', '/alternatives/attio']);
 
-it('renders the works-with strip on the homepage with a link to the developer docs', function (): void {
+it('renders the works-with strip on the homepage with links to the assistant pages and the developer docs', function (): void {
     Cache::put('dockerhub_pulls_manukminasyan_relaticle', 21030, 60);
 
     $html = $this->get('/')->assertOk()->getContent();
@@ -210,6 +210,10 @@ it('renders the works-with strip on the homepage with a link to the developer do
         ->and($strip)->toContain('Claude', 'ChatGPT', 'Cursor', 'Gemini', '+ any MCP client')
         ->and($strip)->toContain('href="'.route('documentation.index').'"')
         ->and($strip)->toContain('21,000+');
+
+    foreach (ConnectableAssistant::cases() as $assistant) {
+        expect($strip)->toContain('href="'.route($assistant->routeName()).'"');
+    }
 });
 
 it('renders the homepage without the product hunt launch badge', function (): void {

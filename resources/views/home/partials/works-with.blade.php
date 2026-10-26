@@ -1,9 +1,9 @@
 @php
     $clients = [
-        ['ri-claude-fill', 'text-[#D4763C]', 'Claude'],
-        ['ri-openai-fill', 'text-gray-900 dark:text-gray-200', 'ChatGPT'],
-        ['ri-cursor-ai-fill', 'text-gray-900 dark:text-gray-200', 'Cursor'],
-        ['ri-gemini-fill', 'text-blue-500', 'Gemini'],
+        ['ri-claude-fill', 'text-[#D4763C]', 'Claude', \App\Enums\ConnectableAssistant::Claude],
+        ['ri-openai-fill', 'text-gray-900 dark:text-gray-200', 'ChatGPT', \App\Enums\ConnectableAssistant::ChatGPT],
+        ['ri-cursor-ai-fill', 'text-gray-900 dark:text-gray-200', 'Cursor', null],
+        ['ri-gemini-fill', 'text-blue-500', 'Gemini', null],
     ];
 @endphp
 
@@ -12,15 +12,22 @@
         <div class="grid grid-cols-2 md:grid-cols-[2fr_repeat(4,1fr)_1.5fr] divide-x divide-y md:divide-y-0 divide-gray-200 dark:divide-white/[0.08] border-x border-gray-200 dark:border-white/[0.08]">
             <div class="col-span-2 md:col-span-1 flex items-center px-5 py-4 md:py-6">
                 <p class="font-mono uppercase tracking-[0.14em] text-[10px] leading-relaxed text-gray-500 dark:text-gray-400">
-                    {{ __('Works with the agents your team already uses') }}
+                    {{ __('Works with the AI you already use') }}
                 </p>
             </div>
 
-            @foreach($clients as [$icon, $color, $name])
-                <div class="flex items-center justify-center gap-2.5 px-4 py-5 md:py-6">
-                    <x-dynamic-component :component="$icon" class="w-5 h-5 shrink-0 {{ $color }}"/>
-                    <span class="text-sm font-semibold tracking-tight text-gray-800 dark:text-gray-200">{{ $name }}</span>
-                </div>
+            @foreach($clients as [$icon, $color, $name, $assistant])
+                @if($assistant)
+                    <a href="{{ route($assistant->routeName()) }}" class="flex items-center justify-center gap-2.5 px-4 py-5 md:py-6 transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.03]">
+                        <x-dynamic-component :component="$icon" class="w-5 h-5 shrink-0 {{ $color }}"/>
+                        <span class="text-sm font-semibold tracking-tight text-gray-800 dark:text-gray-200">{{ $name }}</span>
+                    </a>
+                @else
+                    <div class="flex items-center justify-center gap-2.5 px-4 py-5 md:py-6">
+                        <x-dynamic-component :component="$icon" class="w-5 h-5 shrink-0 {{ $color }}"/>
+                        <span class="text-sm font-semibold tracking-tight text-gray-800 dark:text-gray-200">{{ $name }}</span>
+                    </div>
+                @endif
             @endforeach
 
             @if(\Laravel\Pennant\Feature::active(\App\Features\Documentation::class))
