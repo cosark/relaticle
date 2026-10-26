@@ -966,6 +966,25 @@ it('replaces an older managed subscription without ending the plan', function ()
     Mail::assertNotQueued(ProEndedMail::class);
 });
 
+it('replaces an older managed subscription for a workspace that once paid for Pro', function (): void {
+    $this->travelTo(now()->startOfSecond());
+
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    proSubscriptionOn($workspace, status: 'canceled');
+    pendingManagedSubscription($workspace, 'sub_managed_old', 'managed');
+    pendingManagedSubscription($workspace, 'sub_managed_new');
+    $recorder = stripeManagedSwitch($workspace, plan: Plan::Enterprise, id: 'sub_managed_new');
+
+    sendStripeWebhook(invoicePaidEvent($workspace, [
+        'parent' => ['type' => 'subscription_details', 'subscription_details' => ['subscription' => 'sub_managed_new']],
+    ]))->assertOk();
+
+    expect(Subscription::query()->where('stripe_id', 'sub_managed_old')->sole()->ended())->toBeTrue()
+        ->and($recorder->countFor('DELETE /v1/subscriptions/sub_managed_old'))->toBe(1)
+        ->and($workspace->refresh()->plan)->toBe(Plan::Enterprise);
+});
+
 it('grants and refunds once when Stripe redelivers the paid invoice', function (): void {
     $this->travelTo(now()->startOfSecond());
 

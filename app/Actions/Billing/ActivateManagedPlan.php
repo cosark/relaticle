@@ -106,6 +106,7 @@ final readonly class ActivateManagedPlan
             ->whereIn('type', [SubscriptionType::Default->value, SubscriptionType::Managed->value])
             ->where('stripe_id', '!=', $activatedId)
             ->where('created_at', '<=', $paidAt)
+            ->with('owner')
             ->get()
             ->filter(fn (Subscription $subscription): bool => $subscription->valid());
 
