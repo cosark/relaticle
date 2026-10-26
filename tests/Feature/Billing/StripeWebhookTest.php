@@ -1480,3 +1480,26 @@ it('does not end the plan when a replaced managed subscription is deleted', func
     'another plan' => [Plan::Concierge, Plan::Enterprise],
     'a new price' => [Plan::Concierge, Plan::Concierge],
 ]);
+
+it('ends a Concierge plan even when another workspace holds a valid managed subscription', function (): void {
+    Mail::fake();
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($workspace, stripeId: 'sub_managed_mine');
+
+    $other = stripeBillingWorkspace();
+    $other->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($other, stripeId: 'sub_managed_other');
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'deleted', stripeId: 'sub_managed_mine', overrides: [
+        'status' => 'canceled',
+        'ended_at' => now()->getTimestamp(),
+    ]))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Free)
+        ->and($other->refresh()->plan)->toBe(Plan::Concierge);
+
+    Mail::assertQueued(ProEndedMail::class, 1);
+    Mail::assertQueued(ProEndedMail::class, fn (ProEndedMail $mail): bool => $mail->hasTo($workspace->owner->email)
+        && $mail->envelope()->subject === 'Your Cloud Concierge plan has ended');
+});

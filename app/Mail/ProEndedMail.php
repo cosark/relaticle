@@ -51,11 +51,34 @@ final class ProEndedMail extends Mailable implements ShouldQueue
             markdown: 'mail.pro-ended',
             with: [
                 'heading' => __("mail.pro_ended.{$this->copyKey()}.heading", $this->replacements()),
-                'billingUrl' => Billing::getUrl(panel: 'app', tenant: $this->workspace),
-                'grandfathered' => $this->workspace->hosted_free_grandfathered_at !== null,
+                'ctaUrl' => $this->ctaUrl(),
+                'ctaLabel' => $this->ctaLabel(),
+                'managedPlan' => $this->plan?->marketingLabel(),
+                'grandfathered' => $this->isGrandfathered(),
                 'mailboxSyncPaused' => $this->workspace->hasConnectedMailbox(),
             ],
         );
+    }
+
+    private function isGrandfathered(): bool
+    {
+        return $this->workspace->hosted_free_grandfathered_at !== null;
+    }
+
+    private function ctaUrl(): string
+    {
+        return $this->plan instanceof Plan
+            ? route('contact', ['plan' => $this->plan->value])
+            : Billing::getUrl(panel: 'app', tenant: $this->workspace);
+    }
+
+    private function ctaLabel(): string
+    {
+        if ($this->plan instanceof Plan) {
+            return __('mail.pro_ended.managed_ended.cta');
+        }
+
+        return $this->isGrandfathered() ? __('mail.pro_ended.cta_grandfathered') : __('mail.pro_ended.cta');
     }
 
     private function copyKey(): string

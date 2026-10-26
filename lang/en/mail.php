@@ -57,6 +57,10 @@ return [
         'managed_ended' => [
             'subject' => 'Your :plan plan has ended',
             'heading' => ':plan for :workspace has ended',
+            'preheader' => 'Your records are safe. Talk to us to restart :plan.',
+            'grandfathered' => ':workspace is back on its grandfathered Cloud Free plan. Your data is untouched.',
+            'restore' => 'Talk to us to restart :plan. Your records stay as they are.',
+            'cta' => 'Talk to us',
         ],
         'preheader' => 'Your records are safe. Subscribe to reopen the workspace.',
         'preheader_grandfathered' => 'Your workspace is back on its Cloud Free plan.',
