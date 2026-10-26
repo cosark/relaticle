@@ -737,6 +737,30 @@ it('shows the managed renewal date and amount', function (): void {
         ->assertSee(__('billing.manage.button'));
 });
 
+it('shows the managed renewal beside the cancelled Pro subscription it replaced', function (): void {
+    [, $workspace] = billingPageOwner();
+    $workspace->subscriptions()->create([
+        'type' => 'default',
+        'stripe_id' => 'sub_replaced_pro',
+        'stripe_status' => 'canceled',
+        'stripe_price' => 'price_pro_monthly_test',
+        'quantity' => 1,
+        'ends_at' => now()->subDay(),
+        'created_at' => now()->subMonth(),
+    ])->items()->create([
+        'stripe_id' => 'si_replaced_pro',
+        'stripe_product' => 'prod_pro_test',
+        'stripe_price' => 'price_pro_monthly_test',
+        'quantity' => 1,
+    ]);
+    managedPageWorkspace($workspace);
+    cacheManagedRenewalForPage();
+
+    livewire(Billing::class)
+        ->assertSee('Renews '.now()->addMonths(6)->toFormattedDateString())
+        ->assertSee(__('billing.manage.button'));
+});
+
 it('omits the renewal line when nothing is cached', function (): void {
     [, $workspace] = billingPageOwner();
     managedPageWorkspace($workspace);
