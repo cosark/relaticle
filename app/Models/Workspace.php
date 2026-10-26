@@ -414,9 +414,7 @@ final class Workspace extends Model implements HasAvatar, HasMedia, Onboardable
 
     public function managedSubscription(): ?Subscription
     {
-        $this->loadMissing('subscriptions');
-
-        return $this->subscriptions
+        return $this->ownedSubscriptions()
             ->filter(fn (mixed $subscription): bool => $subscription instanceof Subscription
                 && $subscription->type === SubscriptionType::Managed->value
                 && $subscription->valid()
@@ -433,14 +431,20 @@ final class Workspace extends Model implements HasAvatar, HasMedia, Onboardable
 
     public function pendingManagedSubscription(): ?Subscription
     {
-        $this->loadMissing('subscriptions');
-
-        return $this->subscriptions
+        return $this->ownedSubscriptions()
             ->filter(fn (mixed $subscription): bool => $subscription instanceof Subscription
                 && $subscription->type === SubscriptionType::ManagedPending->value
                 && ! in_array($subscription->stripe_status, StripeSubscriptionStatus::ended(), true))
             ->sortByDesc('created_at')
             ->first();
+    }
+
+    /** @return Collection<int, Model> */
+    private function ownedSubscriptions(): Collection
+    {
+        $this->loadMissing('subscriptions');
+
+        return $this->subscriptions->each(fn (Model $subscription): Model => $subscription->setRelation('owner', $this));
     }
 
     /**

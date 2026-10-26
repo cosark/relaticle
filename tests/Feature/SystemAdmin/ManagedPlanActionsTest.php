@@ -411,6 +411,18 @@ it('voids the unpaid invoice and cancels its subscription', function (): void {
         ->and($workspace->refresh()->plan)->toBe(Plan::Free);
 });
 
+it('withdraws the invoice of a workspace that also holds an ended Pro subscription', function (): void {
+    $workspace = managedPlanWorkspace();
+    Subscription::factory()->canceled()->create(['workspace_id' => $workspace->getKey(), 'stripe_id' => 'sub_ended_pro']);
+    unpaidManagedSubscription($workspace, 'active');
+    withLatestInvoiceStatus($this->stripe, 'open');
+    $this->stripe->respondTo('POST /v1/invoices/in_managed_test/void', ['id' => 'in_managed_test', 'object' => 'invoice', 'status' => 'void']);
+
+    withdrawManagedInvoiceFor($workspace)->assertNotified('Invoice withdrawn');
+
+    expect($this->stripe->countFor('DELETE /v1/subscriptions/sub_managed_test'))->toBe(1);
+});
+
 it('withdraws an incomplete pending invoice', function (): void {
     $workspace = managedPlanWorkspace();
     unpaidManagedSubscription($workspace, 'incomplete');
