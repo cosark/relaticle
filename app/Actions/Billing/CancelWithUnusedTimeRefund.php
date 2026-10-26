@@ -9,6 +9,7 @@ use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Subscription;
 use Stripe\Exception\InvalidRequestException;
 use Stripe\Exception\RateLimitException;
+use Stripe\Exception\UnexpectedValueException as StripeUnexpectedValueException;
 use Stripe\Invoice;
 use Stripe\StripeObject;
 use UnexpectedValueException;
@@ -36,11 +37,13 @@ final readonly class CancelWithUnusedTimeRefund
     {
         try {
             return $this->refund($invoice, $key, $asOf);
-        } catch (RateLimitException $exception) {
+        } catch (RateLimitException|StripeUnexpectedValueException $exception) {
             throw $exception;
         } catch (InvalidRequestException|UnexpectedValueException $exception) {
+            $owed = rescue(fn (): int => $this->unusedAmount($invoice, $asOf), report: false);
+
             report(new UnexpectedValueException(
-                "Switch refund skipped for invoice {$invoice->id} of subscription {$subscription->stripe_id}: {$exception->getMessage()}",
+                "Switch refund skipped for invoice {$invoice->id} of subscription {$subscription->stripe_id} in workspace {$subscription->getAttribute($subscription->owner()->getForeignKeyName())}, owed ".($owed ?? 'unknown')." cents: {$exception->getMessage()}",
                 previous: $exception,
             ));
 

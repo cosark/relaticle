@@ -34,7 +34,7 @@ final readonly class ActivateManagedPlan
         $stripeSubscription = Cashier::stripe()->subscriptions->retrieve($stripeSubscriptionId);
 
         if ($subscription->type === SubscriptionType::Managed->value) {
-            if ($subscription->valid()) {
+            if ($subscription->valid() && in_array($stripeSubscription->status, self::LIVE_STRIPE_STATUSES, true)) {
                 $this->finishSwitch($workspace, $stripeSubscription, $invoiceId);
             }
 
@@ -77,11 +77,7 @@ final readonly class ActivateManagedPlan
         }
 
         if (! in_array($stripeSubscription->status, self::LIVE_STRIPE_STATUSES, true)) {
-            $this->refuse('subscription is not live', $workspace, $stripeSubscription->id, $invoiceId);
-
-            report(new UnexpectedValueException(
-                "Managed invoice {$invoiceId} was paid for subscription {$stripeSubscription->id} in status {$stripeSubscription->status}; nothing was granted.",
-            ));
+            $this->refuse("subscription is {$stripeSubscription->status}", $workspace, $stripeSubscription->id, $invoiceId);
 
             return null;
         }
@@ -160,6 +156,7 @@ final readonly class ActivateManagedPlan
         return Subscription::query()->where($workspace->getForeignKey(), $workspace->getKey());
     }
 
+    // The invoice is paid, so a refusal leaves money with nothing granted and must reach on-call.
     private function refuse(string $reason, Workspace $workspace, string $stripeSubscriptionId, string $invoiceId): void
     {
         Log::warning("Managed plan activation ignored: {$reason}", [
@@ -167,5 +164,9 @@ final readonly class ActivateManagedPlan
             'subscription_id' => $stripeSubscriptionId,
             'invoice_id' => $invoiceId,
         ]);
+
+        report(new UnexpectedValueException(
+            "Managed invoice {$invoiceId} for subscription {$stripeSubscriptionId} of workspace {$workspace->getKey()} was paid and nothing was granted: {$reason}.",
+        ));
     }
 }

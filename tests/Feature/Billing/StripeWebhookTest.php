@@ -1028,8 +1028,12 @@ it('ignores a paid invoice whose customer is not the workspace\'s', function ():
     $recorder = StripeRecorder::install();
 
     Log::spy();
+    Exceptions::fake();
 
     sendStripeWebhook(invoicePaidEvent($workspace, ['customer' => 'cus_someone_else']))->assertOk();
+
+    Exceptions::assertReported(fn (UnexpectedValueException $exception): bool => str_contains($exception->getMessage(), 'in_managed_1')
+        && str_contains($exception->getMessage(), 'customer'));
 
     expect($workspace->refresh()->plan)->toBe(Plan::Free)
         ->and(Subscription::query()->where('stripe_id', 'sub_managed_1')->sole()->type)->toBe(SubscriptionType::ManagedPending->value)
@@ -1051,8 +1055,12 @@ it('grants nothing when the Stripe subscription names another workspace', functi
     ]));
 
     Log::spy();
+    Exceptions::fake();
 
     sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    Exceptions::assertReported(fn (UnexpectedValueException $exception): bool => str_contains($exception->getMessage(), 'workspace mismatch')
+        && str_contains($exception->getMessage(), 'in_managed_1'));
 
     expect($workspace->refresh()->plan)->toBe(Plan::Free)
         ->and(Subscription::query()->where('stripe_id', 'sub_managed_1')->sole()->type)->toBe(SubscriptionType::ManagedPending->value)
@@ -1193,7 +1201,8 @@ it('skips the refund but still switches when Stripe cannot refund the Pro invoic
     sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
 
     Exceptions::assertReported(fn (UnexpectedValueException $exception): bool => str_contains($exception->getMessage(), 'in_pro_1')
-        && str_contains($exception->getMessage(), 'sub_pro_1'));
+        && str_contains($exception->getMessage(), 'sub_pro_1')
+        && str_contains($exception->getMessage(), (string) $workspace->getKey()));
 
     expect($recorder->countFor('DELETE /v1/subscriptions/sub_pro_1'))->toBe(1)
         ->and(Subscription::query()->where('stripe_id', 'sub_pro_1')->sole()->ended())->toBeTrue()
@@ -1216,6 +1225,42 @@ it('skips the refund but still switches when Stripe cannot refund the Pro invoic
         ],
     ]))],
 ]);
+
+it('retries the switch when Stripe fails the refund for a passing reason', function (int $status, array|string $body): void {
+    $this->travelTo(now()->startOfSecond());
+
+    $workspace = proWorkspaceAwaitingManagedPayment();
+    $recorder = stripeManagedSwitch($workspace)->respondTo('POST /v1/refunds', $body, $status);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertStatus(500);
+
+    expect($recorder->countFor('DELETE /v1/subscriptions/sub_pro_1'))->toBe(0)
+        ->and(Subscription::query()->where('stripe_id', 'sub_pro_1')->sole()->ended())->toBeFalse();
+})->with([
+    'rate limited' => [429, ['error' => ['type' => 'invalid_request_error', 'code' => 'rate_limit', 'message' => 'Too many requests']]],
+    'garbled response' => [200, 'not json'],
+]);
+
+it('cancels nothing on a retry once Stripe has canceled the managed subscription', function (): void {
+    $this->travelTo(now()->startOfSecond());
+
+    $workspace = proWorkspaceAwaitingManagedPayment();
+    $recorder = stripeManagedSwitch($workspace)
+        ->respondTo('DELETE /v1/subscriptions/sub_pro_1', ['error' => ['type' => 'api_error', 'message' => 'Stripe is down']], 500);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertStatus(500);
+
+    $recorder->respondTo('/v1/subscriptions/sub_managed_1', stripeManagedSubscriptionBody($workspace, overrides: [
+        'status' => 'canceled',
+        'metadata' => ['workspace_id' => (string) $workspace->getKey(), 'type' => 'managed'],
+    ]));
+    $afterFirstDelivery = count($recorder->requests);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    expect($recorder->writesSince($afterFirstDelivery))->toBe([])
+        ->and(Subscription::query()->where('stripe_id', 'sub_pro_1')->sole()->ended())->toBeFalse();
+});
 
 it('remembers the renewal date and amount for the billing page', function (): void {
     $this->travelTo(now()->startOfSecond());

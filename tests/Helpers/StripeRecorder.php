@@ -33,7 +33,8 @@ final class StripeRecorder implements ClientInterface
     }
 
     /** @param  array<string, mixed>  $body */
-    public function respondTo(string $urlFragment, array $body, int $status = 200): self
+    /** @param  array<string, mixed>|string  $body */
+    public function respondTo(string $urlFragment, array|string $body, int $status = 200): self
     {
         $this->responses[$urlFragment] = ['body' => $body, 'status' => $status];
 
@@ -56,7 +57,7 @@ final class StripeRecorder implements ClientInterface
 
         foreach ($this->responses as $key => $response) {
             if ($this->matches((string) $key, strtoupper((string) $method), (string) $absUrl)) {
-                return [json_encode($response['body']), $response['status'], []];
+                return [is_string($response['body']) ? $response['body'] : json_encode($response['body']), $response['status'], []];
             }
         }
 

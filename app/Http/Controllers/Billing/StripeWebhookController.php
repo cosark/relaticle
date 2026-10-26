@@ -16,6 +16,7 @@ use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierWebhookController;
 use Laravel\Cashier\Subscription;
 use Symfony\Component\HttpFoundation\Response;
+use UnexpectedValueException;
 
 final class StripeWebhookController extends CashierWebhookController
 {
@@ -172,6 +173,10 @@ final class StripeWebhookController extends CashierWebhookController
                 'expected_customer' => $workspace->stripe_id,
                 'invoice_id' => $invoiceId,
             ]);
+
+            report(new UnexpectedValueException(
+                "Managed invoice {$invoiceId} was paid by customer {$customer}, not workspace {$workspace->getKey()}'s; nothing was granted.",
+            ));
 
             return $this->successMethod();
         }
