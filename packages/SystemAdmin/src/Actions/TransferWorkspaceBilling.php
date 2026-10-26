@@ -113,7 +113,7 @@ final readonly class TransferWorkspaceBilling
 
         $source->loadMissing('subscriptions');
 
-        throw_if($this->holdsManagedSubscription($source), TransferRefused::class, 'The source workspace has a managed plan subscription. Withdraw it or let it end before transferring billing.');
+        throw_if($this->holdsManagedSubscription($source), TransferRefused::class, 'The source workspace has a managed plan subscription. Withdraw it, or cancel it in Stripe, before transferring billing.');
 
         $subscription = $source->subscription();
 

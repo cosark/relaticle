@@ -258,7 +258,7 @@ it('refuses to move a workspace that holds a managed plan subscription', functio
     ]);
 
     expect(fn () => app(TransferWorkspaceBilling::class)->execute($source, $target, (string) $this->admin->getKey()))
-        ->toThrow(TransferRefused::class, 'The source workspace has a managed plan subscription. Withdraw it or let it end before transferring billing.');
+        ->toThrow(TransferRefused::class, 'The source workspace has a managed plan subscription. Withdraw it, or cancel it in Stripe, before transferring billing.');
 
     expect($source->refresh()->stripe_id)->toBe('cus_transfer_source')
         ->and($target->refresh()->stripe_id)->toBeNull()
