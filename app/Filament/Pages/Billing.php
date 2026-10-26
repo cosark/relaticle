@@ -22,6 +22,8 @@ use Filament\Pages\Page;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Number;
 use Laravel\Cashier\Subscription;
 use Laravel\Pennant\Feature;
 use Livewire\Attributes\Url;
@@ -182,7 +184,7 @@ final class Billing extends Page
             'subscription' => $subscription,
             'managedSubscription' => $managedSubscription,
             'managedPastDue' => $managedSubscription?->pastDue() ?? false,
-            'renewal' => $this->renewal($managedSubscription),
+            'renewalLabel' => $this->renewalLabel($managedSubscription),
             'pastDue' => $workspace->billingStatus() === BillingStatus::PastDue,
             'onGrace' => $subscription?->onGracePeriod() ?? false,
             'trialAvailable' => $this->trialAvailable(),
@@ -196,14 +198,22 @@ final class Billing extends Page
         ];
     }
 
-    /** @return array{renews_at: int, amount: int, currency: string}|null */
-    private function renewal(?Subscription $managedSubscription): ?array
+    private function renewalLabel(?Subscription $managedSubscription): ?string
     {
         if (! $managedSubscription instanceof Subscription || ! $managedSubscription->active() || $managedSubscription->pastDue() || $managedSubscription->onGracePeriod()) {
             return null;
         }
 
-        return Cache::get(RememberManagedRenewal::CACHE_PREFIX.$managedSubscription->stripe_id);
+        $renewal = Cache::get(RememberManagedRenewal::CACHE_PREFIX.$managedSubscription->stripe_id);
+
+        if (! is_array($renewal)) {
+            return null;
+        }
+
+        return __('billing.managed.renews', [
+            'date' => Date::createFromTimestamp($renewal['renews_at'])->toFormattedDateString(),
+            'amount' => Number::currency($renewal['amount'] / 100, strtoupper($renewal['currency']), precision: $renewal['amount'] % 100 === 0 ? 0 : 2),
+        ]);
     }
 
     /** @return array{billingStatus: BillingStatus, mailboxSyncPaused: bool, otherWorkspaces: Collection<int, Workspace>} */

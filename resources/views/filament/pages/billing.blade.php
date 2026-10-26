@@ -44,11 +44,6 @@
             default => 'bg-primary',
         };
 
-        $renewalLabel = is_array($renewal) ? __('billing.managed.renews', [
-            'date' => \Illuminate\Support\Facades\Date::createFromTimestamp($renewal['renews_at'])->toFormattedDateString(),
-            'amount' => \Illuminate\Support\Number::currency($renewal['amount'] / 100, strtoupper($renewal['currency']), precision: $renewal['amount'] % 100 === 0 ? 0 : 2),
-        ]) : null;
-
         $card = 'rounded-2xl border border-[var(--surface-card-border)] bg-white shadow-sm dark:bg-[var(--surface-card-bg)] dark:shadow-none';
     @endphp
 
