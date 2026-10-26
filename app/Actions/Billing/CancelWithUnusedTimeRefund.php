@@ -4,23 +4,18 @@ declare(strict_types=1);
 
 namespace App\Actions\Billing;
 
+use Carbon\CarbonImmutable;
 use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Subscription;
+use Stripe\Exception\InvalidRequestException;
+use Stripe\Exception\RateLimitException;
 use Stripe\Invoice;
+use Stripe\StripeObject;
 use UnexpectedValueException;
 
 final readonly class CancelWithUnusedTimeRefund
 {
-    public function execute(Subscription $subscription, string $idempotencyKey): int
-    {
-        $refunded = $this->refundUnusedTime($subscription, $idempotencyKey);
-
-        $subscription->noProrate()->cancelNow();
-
-        return $refunded;
-    }
-
-    private function refundUnusedTime(Subscription $subscription, string $idempotencyKey): int
+    public function execute(Subscription $subscription, string $idempotencyKey, CarbonImmutable $asOf): int
     {
         $invoice = Cashier::stripe()->invoices->all([
             'subscription' => $subscription->stripe_id,
@@ -28,25 +23,56 @@ final readonly class CancelWithUnusedTimeRefund
             'limit' => 1,
         ])->data[0] ?? null;
 
-        if (! $invoice instanceof Invoice) {
+        $refunded = $invoice instanceof Invoice
+            ? $this->refundUnusedTime($subscription, $invoice, "{$idempotencyKey}-{$invoice->id}", $asOf)
+            : 0;
+
+        $subscription->noProrate()->cancelNow();
+
+        return $refunded;
+    }
+
+    private function refundUnusedTime(Subscription $subscription, Invoice $invoice, string $key, CarbonImmutable $asOf): int
+    {
+        try {
+            return $this->refund($invoice, $key, $asOf);
+        } catch (RateLimitException $exception) {
+            throw $exception;
+        } catch (InvalidRequestException|UnexpectedValueException $exception) {
+            report(new UnexpectedValueException(
+                "Switch refund skipped for invoice {$invoice->id} of subscription {$subscription->stripe_id}: {$exception->getMessage()}",
+                previous: $exception,
+            ));
+
             return 0;
         }
+    }
 
-        $amount = $this->unusedAmount($invoice);
+    private function refund(Invoice $invoice, string $key, CarbonImmutable $asOf): int
+    {
+        $amount = $this->unusedAmount($invoice, $asOf);
 
         if ($amount === 0) {
             return 0;
         }
 
+        $paymentIntent = $this->paymentIntentOf($invoice);
+        $existing = $this->refundWithKey($paymentIntent, $key);
+
+        if ($existing instanceof StripeObject) {
+            return (int) $existing['amount'];
+        }
+
         Cashier::stripe()->refunds->create([
-            'payment_intent' => $this->paymentIntentOf($invoice),
+            'payment_intent' => $paymentIntent,
             'amount' => $amount,
-        ], ['idempotency_key' => $idempotencyKey]);
+            'metadata' => ['switch_key' => $key],
+        ], ['idempotency_key' => $key]);
 
         return $amount;
     }
 
-    private function unusedAmount(Invoice $invoice): int
+    private function unusedAmount(Invoice $invoice, CarbonImmutable $asOf): int
     {
         $paid = (int) $invoice->amount_paid;
 
@@ -54,26 +80,48 @@ final readonly class CancelWithUnusedTimeRefund
             return 0;
         }
 
-        $period = $invoice->lines->data[0]->period ?? null;
+        ['start' => $start, 'end' => $end] = $this->subscriptionPeriod($invoice);
 
-        if ($period === null || $period->end <= $period->start) {
-            throw new UnexpectedValueException("Invoice {$invoice->id} has no billing period to refund against.");
+        return max(0, min($paid, intdiv($paid * ($end - $asOf->getTimestamp()), $end - $start)));
+    }
+
+    /** @return array{start: int, end: int} */
+    private function subscriptionPeriod(Invoice $invoice): array
+    {
+        foreach ($invoice->lines->data as $line) {
+            $isSubscriptionLine = ($line->parent->type ?? null) === 'subscription_item_details'
+                && ! ($line->parent->subscription_item_details->proration ?? false);
+
+            if ($isSubscriptionLine && $line->period['end'] > $line->period['start']) {
+                return ['start' => (int) $line->period['start'], 'end' => (int) $line->period['end']];
+            }
         }
 
-        $remaining = $period->end - now()->getTimestamp();
-
-        return max(0, min($paid, intdiv($paid * $remaining, $period->end - $period->start)));
+        throw new UnexpectedValueException("Invoice {$invoice->id} has no subscription period to refund against.");
     }
 
     private function paymentIntentOf(Invoice $invoice): string
     {
-        $payment = Cashier::stripe()->invoicePayments->all(['invoice' => $invoice->id])->data[0]->payment ?? null;
-        $intent = $payment->payment_intent ?? null;
+        $payments = Cashier::stripe()->invoicePayments->all(['invoice' => $invoice->id, 'status' => 'paid']);
+        $intent = $payments->data[0]->payment->payment_intent ?? null;
 
         if (! is_string($intent)) {
-            throw new UnexpectedValueException("Invoice {$invoice->id} has no payment intent to refund.");
+            throw new UnexpectedValueException("Invoice {$invoice->id} was not paid by a payment intent.");
         }
 
         return $intent;
+    }
+
+    private function refundWithKey(string $paymentIntent, string $key): ?StripeObject
+    {
+        $refunds = Cashier::stripe()->refunds->all(['payment_intent' => $paymentIntent, 'limit' => 100]);
+
+        foreach ($refunds->data as $refund) {
+            if (($refund->metadata['switch_key'] ?? null) === $key) {
+                return $refund;
+            }
+        }
+
+        return null;
     }
 }

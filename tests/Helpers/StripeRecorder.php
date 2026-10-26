@@ -17,7 +17,7 @@ use Stripe\HttpClient\ClientInterface;
  */
 final class StripeRecorder implements ClientInterface
 {
-    /** @var list<array{url: string, params: array<string, mixed>, headers: array<string, mixed>}> */
+    /** @var list<array{method: string, url: string, params: array<string, mixed>, headers: array<string, mixed>}> */
     public array $requests = [];
 
     /** @var array<string, array{body: array<string, mixed>, status: int}> */
@@ -52,10 +52,10 @@ final class StripeRecorder implements ClientInterface
      */
     public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null): array
     {
-        $this->requests[] = ['url' => (string) $absUrl, 'params' => $params, 'headers' => $headers];
+        $this->requests[] = ['method' => strtoupper((string) $method), 'url' => (string) $absUrl, 'params' => $params, 'headers' => $headers];
 
-        foreach ($this->responses as $urlFragment => $response) {
-            if (str_contains((string) $absUrl, $urlFragment)) {
+        foreach ($this->responses as $key => $response) {
+            if ($this->matches((string) $key, strtoupper((string) $method), (string) $absUrl)) {
                 return [json_encode($response['body']), $response['status'], []];
             }
         }
@@ -82,11 +82,32 @@ final class StripeRecorder implements ClientInterface
         return [json_encode($body), 200, []];
     }
 
+    private function matches(string $key, string $method, string $url): bool
+    {
+        if (preg_match('/^(GET|POST|DELETE) (.+)$/', $key, $parts) === 1) {
+            return $parts[1] === $method && str_contains($url, $parts[2]);
+        }
+
+        return str_contains($url, $key);
+    }
+
+    /** @return list<array{method: string, url: string}> */
+    public function writesSince(int $offset): array
+    {
+        return array_values(array_map(
+            fn (array $request): array => ['method' => $request['method'], 'url' => $request['url']],
+            array_filter(
+                array_slice($this->requests, $offset),
+                fn (array $request): bool => $request['method'] !== 'GET',
+            ),
+        ));
+    }
+
     /** @return list<string> */
     public function headersFor(string $urlFragment): array
     {
         foreach ($this->requests as $request) {
-            if (str_contains($request['url'], $urlFragment)) {
+            if ($this->matches($urlFragment, $request['method'], $request['url'])) {
                 return array_values($request['headers']);
             }
         }
@@ -98,7 +119,19 @@ final class StripeRecorder implements ClientInterface
     {
         return count(array_filter(
             $this->requests,
-            fn (array $request): bool => str_contains($request['url'], $urlFragment),
+            fn (array $request): bool => $this->matches($urlFragment, $request['method'], $request['url']),
+        ));
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function allParamsFor(string $urlFragment): array
+    {
+        return array_values(array_map(
+            fn (array $request): array => $request['params'],
+            array_filter(
+                $this->requests,
+                fn (array $request): bool => $this->matches($urlFragment, $request['method'], $request['url']),
+            ),
         ));
     }
 
@@ -106,7 +139,7 @@ final class StripeRecorder implements ClientInterface
     public function lastParamsFor(string $urlFragment): array
     {
         foreach (array_reverse($this->requests) as $request) {
-            if (str_contains($request['url'], $urlFragment)) {
+            if ($this->matches($urlFragment, $request['method'], $request['url'])) {
                 return $request['params'];
             }
         }
@@ -118,7 +151,7 @@ final class StripeRecorder implements ClientInterface
     public function paramsFor(string $urlFragment): array
     {
         foreach ($this->requests as $request) {
-            if (str_contains($request['url'], $urlFragment)) {
+            if ($this->matches($urlFragment, $request['method'], $request['url'])) {
                 return $request['params'];
             }
         }

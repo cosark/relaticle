@@ -137,7 +137,8 @@ final class StripeWebhookController extends CashierWebhookController
     /**
      * A managed plan switches on when its first invoice is paid, and nowhere
      * else: any other paid invoice (a Pro renewal, a credit pack, a managed
-     * renewal) is none of this handler's business.
+     * renewal) is none of this handler's business. A row already `managed` is
+     * admitted so a redelivery can finish a switch that failed part way.
      *
      * @param  array<string, mixed>  $payload
      */
@@ -153,7 +154,7 @@ final class StripeWebhookController extends CashierWebhookController
 
         $subscription = Subscription::query()
             ->where('stripe_id', $stripeSubscriptionId)
-            ->where('type', SubscriptionType::ManagedPending->value)
+            ->whereIn('type', [SubscriptionType::ManagedPending->value, SubscriptionType::Managed->value])
             ->first();
         $workspace = $subscription?->owner()->first();
 

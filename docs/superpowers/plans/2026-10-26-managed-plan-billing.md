@@ -34,6 +34,7 @@ These change the mechanism and keep the outcome. The PR body must state them.
 3. **`BillingStatus` is not touched.** A past-due managed workspace already reads as Concierge or Enterprise and keeps access. The overdue banner reads the managed subscription directly.
 4. **The renewal line reads a cache entry** written by the webhooks from the fresh Stripe object (`RememberManagedRenewal`). A cache miss omits the line. The billing page makes no Stripe call.
 5. **`payment_behavior: allow_incomplete`** is passed explicitly. Cashier's default `default_incomplete` could leave the subscription `incomplete`, and Cashier deletes an `incomplete_expired` row after 23 hours. The 2026-10-26 sandbox spike, with no `payment_behavior`, started `active`.
+6. **Grant first.** The plan is granted before replaced subscriptions are cancelled, so a late Pro deleted event cannot downgrade a paying workspace; a failed refund retries without re-granting.
 
 ## Review Focus
 
@@ -41,7 +42,7 @@ These change the mechanism and keep the outcome. The PR body must state them.
 2. **`invoice.paid` for an invoice that is not a managed first invoice** (a Pro renewal, a credit pack, a managed renewal). It changes nothing and grants nothing. Task 3 owns "ignores a paid invoice that does not belong to a pending managed subscription".
 3. **A Pro subscriber still on a Stripe trial (nothing charged) switches.** No refund call is made, Pro is cancelled and the plan is granted. Task 3 owns "switches a Pro trial with no refund".
 4. **A paused workspace (trial ended) is sent an invoice.** It stays paused until the invoice is paid. Task 2 owns "keeps a paused workspace paused while the managed invoice is unpaid".
-5. **Stripe fails mid-switch** (the refund call errors). The webhook returns 500 so Stripe retries. Nothing is granted, and the retry refunds with the same idempotency key. Task 3 owns "fails the paid webhook without granting when the refund call fails".
+5. **Stripe fails mid-switch** (the refund call errors). The webhook returns 500 so Stripe retries. The plan is already granted, and the retry refunds once with the same key and amount. Task 3 owns "grants the plan and retries the switch refund when the refund call fails".
 
 ---
 
@@ -142,7 +143,7 @@ The modal states: "Stripe emails a yearly invoice. The plan switches on when it 
 - Produces:
   - `StripeWebhookController::handleInvoicePaid(array $payload): Response`
   - `ActivateManagedPlan::execute(Workspace $workspace, string $stripeSubscriptionId, string $invoiceId): void`
-  - `CancelWithUnusedTimeRefund::execute(Subscription $subscription, string $idempotencyKey): int`. It returns the cents refunded, 0 when nothing was charged.
+  - `CancelWithUnusedTimeRefund::execute(Subscription $subscription, string $idempotencyKey, CarbonImmutable $asOf): int`. It returns the cents refunded, 0 when nothing was charged. `$asOf` is the managed invoice's paid time, and the action appends `-{proInvoiceId}` to the key.
   - `RememberManagedRenewal::execute(array $stripeSubscription): void`, with `public const string CACHE_PREFIX = 'managed-renewal:'`. The value is `['renews_at' => int timestamp, 'amount' => int cents, 'currency' => string]`, read from `items.data.0.current_period_end` and `items.data.0.price.unit_amount`. It is stored forever and keyed by the Stripe subscription id.
 
 How the pieces behave:
