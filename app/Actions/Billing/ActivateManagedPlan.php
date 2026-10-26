@@ -139,7 +139,7 @@ final readonly class ActivateManagedPlan
 
             $subscription->forceFill(['type' => SubscriptionType::Managed->value])->save();
 
-            $locked->forceFill(['plan' => $plan])->save();
+            $locked->forceFill(['plan' => $plan, 'trial_ends_at' => null])->save();
 
             $this->credits->resetPeriod($locked);
 

@@ -942,6 +942,26 @@ it('switches a Pro trial with no refund', function (): void {
         ->and($workspace->refresh()->plan)->toBe(Plan::Concierge);
 });
 
+it('ends the trial when the managed invoice is paid, so a cancelled managed plan does not stay on for free', function (): void {
+    Mail::fake();
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Pro, 'trial_ends_at' => now()->addDays(10)])->save();
+    managedSubscriptionOn($workspace, type: 'managed_pending');
+    stripeManagedSwitch($workspace, amountPaid: 0);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Concierge)
+        ->and($workspace->trial_ends_at)->toBeNull();
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'deleted', overrides: [
+        'status' => 'canceled',
+        'ended_at' => now()->getTimestamp(),
+    ]))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Free);
+});
+
 it('replaces an older managed subscription without ending the plan', function (): void {
     $this->travelTo(now()->startOfSecond());
     Mail::fake();
