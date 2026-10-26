@@ -28,9 +28,23 @@ final readonly class CancelWithUnusedTimeRefund
             ? $this->refundUnusedTime($subscription, $invoice, "{$idempotencyKey}-{$invoice->id}", $asOf)
             : 0;
 
+        $this->voidOpenInvoices($subscription);
+
         $subscription->noProrate()->cancelNow();
 
         return $refunded;
+    }
+
+    // Stripe keeps a cancelled subscription's open invoices payable, so a payment would buy nothing.
+    private function voidOpenInvoices(Subscription $subscription): void
+    {
+        $invoices = Cashier::stripe()->invoices->all(['subscription' => $subscription->stripe_id, 'status' => 'open', 'limit' => 100]);
+
+        foreach ($invoices->data as $invoice) {
+            if ($invoice->status === Invoice::STATUS_OPEN) {
+                Cashier::stripe()->invoices->voidInvoice($invoice->id);
+            }
+        }
     }
 
     private function refundUnusedTime(Subscription $subscription, Invoice $invoice, string $key, CarbonImmutable $asOf): int

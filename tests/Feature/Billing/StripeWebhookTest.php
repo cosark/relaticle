@@ -988,6 +988,35 @@ it('cancels an unpaid managed subscription when a newer managed invoice is paid'
         ->and($workspace->refresh()->plan)->toBe(Plan::Enterprise);
 });
 
+it('voids the open invoice of a replaced subscription before cancelling it', function (): void {
+    $this->travelTo(now()->startOfSecond());
+
+    $workspace = stripeBillingWorkspace();
+    pendingManagedSubscription($workspace, 'sub_managed_old', 'managed')->forceFill(['stripe_status' => 'unpaid'])->save();
+    pendingManagedSubscription($workspace, 'sub_managed_new');
+    $invoices = stripePaidProInvoice(70800, [[
+        'period' => ['start' => now()->subYear()->subDays(30)->getTimestamp(), 'end' => now()->subDays(30)->getTimestamp()],
+        'parent' => ['type' => 'subscription_item_details', 'subscription_item_details' => ['proration' => false]],
+    ]]);
+    $invoices['data'][] = ['id' => 'in_old_open', 'object' => 'invoice', 'status' => 'open', 'amount_paid' => 0];
+    $recorder = stripeManagedSwitch($workspace, plan: Plan::Enterprise, id: 'sub_managed_new')
+        ->respondTo('/v1/invoices/in_old_open/void', ['id' => 'in_old_open', 'object' => 'invoice', 'status' => 'void'])
+        ->respondTo('/v1/invoices', $invoices);
+
+    sendStripeWebhook(invoicePaidEvent($workspace, [
+        'parent' => ['type' => 'subscription_details', 'subscription_details' => ['subscription' => 'sub_managed_new']],
+    ]))->assertOk();
+
+    $writes = collect($recorder->requests)
+        ->filter(fn (array $request): bool => $request['method'] !== 'GET' && str_contains($request['url'], 'old'))
+        ->map(fn (array $request): string => $request['method'].' '.Str::after($request['url'], 'api.stripe.com'))
+        ->values()
+        ->all();
+
+    expect($writes)->toBe(['POST /v1/invoices/in_old_open/void', 'DELETE /v1/subscriptions/sub_managed_old'])
+        ->and($workspace->refresh()->plan)->toBe(Plan::Enterprise);
+});
+
 it('replaces an older managed subscription for a workspace that once paid for Pro', function (): void {
     $this->travelTo(now()->startOfSecond());
 
