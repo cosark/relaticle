@@ -54,6 +54,10 @@ return [
             'subject' => 'Your Cloud Pro subscription has ended',
             'heading' => 'Cloud Pro for :workspace has ended',
         ],
+        'managed_ended' => [
+            'subject' => 'Your :plan plan has ended',
+            'heading' => ':plan for :workspace has ended',
+        ],
         'preheader' => 'Your records are safe. Subscribe to reopen the workspace.',
         'preheader_grandfathered' => 'Your workspace is back on its Cloud Free plan.',
         'paused' => 'Cloud access to :workspace is now paused. Your records are safe, and nothing has been deleted.',

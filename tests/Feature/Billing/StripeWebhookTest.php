@@ -13,6 +13,7 @@ use App\Enums\BillingStatus;
 use App\Enums\Notifications\NotificationReason;
 use App\Enums\Plan;
 use App\Enums\SubscriptionType;
+use App\Features\Billing as BillingFeature;
 use App\Filament\Pages\Billing;
 use App\Http\Controllers\Billing\StripeWebhookController;
 use App\Listeners\Billing\SyncPlanOnStripeSubscriptionChange;
@@ -21,6 +22,7 @@ use App\Mail\ProEndedMail;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\PaymentFailedNotification;
+use App\Services\Billing\HostedWorkspaceAccess;
 use App\Support\CurrentWorkspace;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Exceptions;
@@ -29,6 +31,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Cashier\Subscription;
+use Laravel\Pennant\Feature;
 use Livewire\Livewire;
 use Relaticle\Chat\Models\AiCreditBalance;
 use Relaticle\Chat\Models\AiCreditTransaction;
@@ -1344,3 +1347,136 @@ it('syncs later stripe events to the workspace that received a transferred subsc
         ->and($target->refresh()->plan)->toBe(Plan::Pro)
         ->and($source->refresh()->plan)->toBe(Plan::Free);
 });
+
+function managedSubscriptionOn(Workspace $workspace, Plan $plan = Plan::Concierge, string $stripeId = 'sub_managed_1', string $type = 'managed', string $status = 'active'): Subscription
+{
+    config()->set('services.stripe.products.concierge', 'prod_concierge_test');
+    config()->set('services.stripe.products.enterprise', 'prod_enterprise_test');
+
+    $subscription = pendingManagedSubscription($workspace, $stripeId, $type);
+    $subscription->forceFill(['stripe_status' => $status])->save();
+    $subscription->items()->create([
+        'stripe_id' => "si_{$stripeId}",
+        'stripe_product' => $plan->stripeProduct(),
+        'stripe_price' => $subscription->stripe_price,
+        'quantity' => 1,
+    ]);
+
+    return $subscription;
+}
+
+/**
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function managedSubscriptionEvent(Workspace $workspace, string $event, Plan $plan = Plan::Concierge, string $stripeId = 'sub_managed_1', array $overrides = []): array
+{
+    config()->set('services.stripe.products.concierge', 'prod_concierge_test');
+    config()->set('services.stripe.products.enterprise', 'prod_enterprise_test');
+
+    $payload = stripeSubscriptionEvent($workspace, $event, array_merge([
+        'id' => $stripeId,
+        'price' => "price_inline_{$stripeId}",
+        'metadata' => ['type' => 'managed', 'workspace_id' => (string) $workspace->getKey()],
+    ], $overrides));
+
+    $payload['data']['object']['items']['data'][0]['id'] = "si_{$stripeId}";
+    $payload['data']['object']['items']['data'][0]['price']['product'] = $plan->stripeProduct();
+
+    return $payload;
+}
+
+it('drops a lapsed Concierge workspace to Free and tells the owner', function (): void {
+    Mail::fake();
+    Feature::define(BillingFeature::class, true);
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($workspace);
+
+    expect(resolve(HostedWorkspaceAccess::class)->allows($workspace->refresh()))->toBeTrue();
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'deleted', overrides: [
+        'status' => 'canceled',
+        'ended_at' => now()->getTimestamp(),
+    ]))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Free)
+        ->and(resolve(HostedWorkspaceAccess::class)->allows($workspace))->toBeFalse();
+
+    Mail::assertQueued(ProEndedMail::class, 1);
+    Mail::assertQueued(ProEndedMail::class, fn (ProEndedMail $mail): bool => $mail->hasTo($workspace->owner->email)
+        && $mail->envelope()->subject === 'Your Cloud Concierge plan has ended');
+});
+
+it('keeps a past-due Concierge workspace on its plan', function (): void {
+    Mail::fake();
+    Feature::define(BillingFeature::class, true);
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($workspace);
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'updated', overrides: ['status' => 'past_due']))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Concierge)
+        ->and(resolve(HostedWorkspaceAccess::class)->allows($workspace))->toBeTrue();
+
+    Mail::assertNotQueued(ProEndedMail::class);
+});
+
+it('leaves a hand-granted plan alone when an unpaid managed invoice is cancelled', function (): void {
+    Mail::fake();
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Enterprise])->save();
+    managedSubscriptionOn($workspace, Plan::Enterprise, type: 'managed_pending');
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'deleted', Plan::Enterprise, overrides: [
+        'status' => 'canceled',
+        'ended_at' => now()->getTimestamp(),
+        'metadata' => ['type' => 'managed_pending', 'workspace_id' => (string) $workspace->getKey()],
+    ]))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Enterprise);
+
+    Mail::assertNotQueued(ProEndedMail::class);
+});
+
+it('grants nothing when a subscription that is still unpaid or already paid reports an update', function (string $type): void {
+    $workspace = stripeBillingWorkspace();
+    managedSubscriptionOn($workspace, Plan::Enterprise, type: $type);
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'updated', Plan::Enterprise, overrides: [
+        'metadata' => ['type' => $type, 'workspace_id' => (string) $workspace->getKey()],
+    ]))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Free);
+})->with(['managed_pending', 'managed']);
+
+it('does not end the plan when a replaced managed subscription is deleted', function (Plan $oldPlan, Plan $newPlan): void {
+    $this->travelTo(now()->startOfSecond());
+    Mail::fake();
+
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => $oldPlan])->save();
+    managedSubscriptionOn($workspace, $oldPlan, 'sub_managed_old');
+    managedSubscriptionOn($workspace, $newPlan, 'sub_managed_new', 'managed_pending');
+    stripeManagedSwitch($workspace, plan: $newPlan, id: 'sub_managed_new');
+
+    sendStripeWebhook(invoicePaidEvent($workspace, [
+        'parent' => ['type' => 'subscription_details', 'subscription_details' => ['subscription' => 'sub_managed_new']],
+    ]))->assertOk();
+
+    expect($workspace->refresh()->plan)->toBe($newPlan)
+        ->and(Subscription::query()->where('stripe_id', 'sub_managed_old')->sole()->ended())->toBeTrue();
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'deleted', $oldPlan, 'sub_managed_old', [
+        'status' => 'canceled',
+        'ended_at' => now()->getTimestamp(),
+    ]))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe($newPlan);
+
+    Mail::assertNotQueued(ProEndedMail::class);
+})->with([
+    'another plan' => [Plan::Concierge, Plan::Enterprise],
+    'a new price' => [Plan::Concierge, Plan::Concierge],
+]);

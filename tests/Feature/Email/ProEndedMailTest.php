@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\Plan;
 use App\Filament\Pages\Billing;
 use App\Mail\ProEndedMail;
 use App\Models\User;
@@ -45,6 +46,18 @@ it('names the ended subscription rather than a trial', function (): void {
 
     expect($mail->envelope()->subject)->not->toStartWith('mail.');
 });
+
+it('names the managed plan that ended', function (Plan $plan, string $label): void {
+    $mail = ProEndedMail::afterManagedPlan(proEndedWorkspace(), $plan);
+
+    $mail->assertHasSubject("Your {$label} plan has ended");
+    $mail->assertSeeInHtml("{$label} for Acme has ended");
+    $mail->assertSeeInHtml(__('mail.pro_ended.paused', ['workspace' => 'Acme']));
+    $mail->assertDontSeeInHtml('mail.pro_ended.');
+})->with([
+    'concierge' => [Plan::Concierge, 'Cloud Concierge'],
+    'enterprise' => [Plan::Enterprise, 'Enterprise'],
+]);
 
 it('tells a grandfathered workspace it is back on Cloud Free, not paused', function (): void {
     $mail = ProEndedMail::afterTrial(proEndedWorkspace(['hosted_free_grandfathered_at' => now()->subYear()]));

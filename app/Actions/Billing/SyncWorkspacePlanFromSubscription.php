@@ -6,6 +6,7 @@ namespace App\Actions\Billing;
 
 use App\Enums\Plan;
 use App\Enums\StripeSubscriptionStatus;
+use App\Enums\SubscriptionType;
 use App\Mail\ProEndedMail;
 use App\Models\User;
 use App\Models\Workspace;
@@ -21,7 +22,7 @@ final readonly class SyncWorkspacePlanFromSubscription
 
     public function execute(Workspace $workspace, Subscription $subscription): void
     {
-        $subscriptionPlan = Plan::fromStripePrice($subscription->stripe_price);
+        $subscriptionPlan = $this->subscriptionPlan($subscription);
 
         if (! $subscriptionPlan instanceof Plan) {
             Log::warning('Stripe subscription price is not mapped to a plan', [
@@ -57,12 +58,50 @@ final readonly class SyncWorkspacePlanFromSubscription
         });
 
         if ($target === Plan::default() && $workspace->owner instanceof User) {
-            Mail::to($workspace->owner->email)->queue(ProEndedMail::afterSubscription($workspace));
+            Mail::to($workspace->owner->email)->queue($this->endedMail($workspace, $subscriptionPlan));
         }
+    }
+
+    private function subscriptionPlan(Subscription $subscription): ?Plan
+    {
+        $product = $subscription->items()->value('stripe_product');
+
+        return Plan::fromStripePrice($subscription->stripe_price)
+            ?? Plan::fromStripeProduct(is_string($product) ? $product : null);
+    }
+
+    private function endedMail(Workspace $workspace, Plan $endedPlan): ProEndedMail
+    {
+        return $endedPlan->isManaged()
+            ? ProEndedMail::afterManagedPlan($workspace, $endedPlan)
+            : ProEndedMail::afterSubscription($workspace);
+    }
+
+    private function leavesPlanToManagedGrant(Workspace $workspace, Subscription $subscription): bool
+    {
+        return match ($subscription->type) {
+            SubscriptionType::ManagedPending->value => true,
+            SubscriptionType::Managed->value => $subscription->valid() || $this->hasOtherValidManagedSubscription($workspace, $subscription),
+            default => false,
+        };
+    }
+
+    private function hasOtherValidManagedSubscription(Workspace $workspace, Subscription $subscription): bool
+    {
+        return Subscription::query()
+            ->where($workspace->getForeignKey(), $workspace->getKey())
+            ->where('type', SubscriptionType::Managed->value)
+            ->where('stripe_id', '!=', $subscription->stripe_id)
+            ->get()
+            ->contains(fn (Subscription $other): bool => $other->valid());
     }
 
     private function targetPlan(Workspace $workspace, Subscription $subscription, Plan $subscriptionPlan): ?Plan
     {
+        if ($this->leavesPlanToManagedGrant($workspace, $subscription)) {
+            return null;
+        }
+
         if ($workspace->plan->isManaged() && $subscriptionPlan !== $workspace->plan) {
             return null;
         }
