@@ -96,8 +96,20 @@ final readonly class SyncWorkspacePlanFromSubscription
             ->contains(fn (Subscription $other): bool => $other->valid());
     }
 
+    private function restartsLapsedManagedPlan(Workspace $workspace, Subscription $subscription, Plan $subscriptionPlan): bool
+    {
+        return $subscription->type === SubscriptionType::Managed->value
+            && $subscription->valid()
+            && $subscriptionPlan->isManaged()
+            && $workspace->plan === Plan::default();
+    }
+
     private function targetPlan(Workspace $workspace, Subscription $subscription, Plan $subscriptionPlan): ?Plan
     {
+        if ($this->restartsLapsedManagedPlan($workspace, $subscription, $subscriptionPlan)) {
+            return $subscriptionPlan;
+        }
+
         if ($this->leavesPlanToManagedGrant($workspace, $subscription)) {
             return null;
         }

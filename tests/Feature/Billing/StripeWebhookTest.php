@@ -1462,16 +1462,43 @@ it('leaves a hand-granted plan alone when an unpaid managed invoice is cancelled
     Mail::assertNotQueued(ProEndedMail::class);
 });
 
-it('grants nothing when a subscription that is still unpaid or already paid reports an update', function (string $type): void {
+it('grants nothing when a subscription that is still unpaid reports an update', function (): void {
     $workspace = stripeBillingWorkspace();
-    managedSubscriptionOn($workspace, Plan::Enterprise, type: $type);
+    managedSubscriptionOn($workspace, Plan::Enterprise, type: 'managed_pending');
 
     sendStripeWebhook(managedSubscriptionEvent($workspace, 'updated', Plan::Enterprise, overrides: [
-        'metadata' => ['type' => $type, 'workspace_id' => (string) $workspace->getKey()],
+        'metadata' => ['type' => 'managed_pending', 'workspace_id' => (string) $workspace->getKey()],
     ]))->assertSuccessful();
 
     expect($workspace->refresh()->plan)->toBe(Plan::Free);
-})->with(['managed_pending', 'managed']);
+});
+
+it('restores a managed plan when Stripe marks it unpaid and a payment later brings it back', function (): void {
+    Mail::fake();
+    Feature::define(BillingFeature::class, true);
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($workspace);
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'updated', overrides: ['status' => 'unpaid']))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Free);
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'updated', overrides: ['status' => 'active']))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Concierge)
+        ->and($workspace->aiCreditBalance->credits_remaining)->toBe(Plan::Concierge->credits());
+});
+
+it('keeps a hand-granted Enterprise plan when a valid Concierge subscription reports an update', function (): void {
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Enterprise])->save();
+    managedSubscriptionOn($workspace);
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'updated'))->assertSuccessful();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Enterprise);
+});
 
 it('does not end the plan when a replaced managed subscription is deleted', function (Plan $oldPlan, Plan $newPlan): void {
     $this->travelTo(now()->startOfSecond());
