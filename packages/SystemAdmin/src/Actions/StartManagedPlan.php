@@ -7,6 +7,7 @@ namespace Relaticle\SystemAdmin\Actions;
 use App\Enums\Plan;
 use App\Enums\SubscriptionType;
 use App\Models\Workspace;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
@@ -21,6 +22,21 @@ final readonly class StartManagedPlan
     {
         abort_unless(Gate::forUser($admin)->allows('manageManagedPlan', $workspace), 403);
 
+        $lock = Cache::lock("managed-plan-start:{$workspace->getKey()}", 60);
+
+        if (! $lock->get()) {
+            $this->refuse('Another managed plan is being started for this workspace. Reload the page.');
+        }
+
+        try {
+            return $this->start($workspace, $plan, $yearlyAmount, $billingEmail);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function start(Workspace $workspace, Plan $plan, int $yearlyAmount, ?string $billingEmail): Subscription
+    {
         $this->assertStartable($workspace, $plan, $yearlyAmount);
 
         $subscription = $this->createInvoicedSubscription($workspace, $plan, $yearlyAmount);

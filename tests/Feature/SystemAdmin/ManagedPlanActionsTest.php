@@ -10,6 +10,7 @@ use App\Services\Billing\HostedWorkspaceAccess;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
@@ -254,6 +255,19 @@ it('tells the sysadmin to reload when Stripe fails to start the plan', function 
     'creating the subscription' => ['/v1/subscriptions'],
     'sending the invoice' => ['/v1/invoices/in_managed_test/send'],
 ]);
+
+it('refuses a second start while the first is still talking to Stripe', function (): void {
+    $workspace = managedPlanWorkspace();
+    $lock = Cache::lock("managed-plan-start:{$workspace->getKey()}", 60);
+    $lock->get();
+
+    startManagedPlanFor($workspace, ['plan' => Plan::Concierge->value, 'amount' => 708])
+        ->assertHasActionErrors(['plan']);
+
+    $lock->release();
+
+    expect(subscriptionRequests($this->stripe))->toBe(0);
+});
 
 it('refuses a customer with a Stripe balance', function (): void {
     $workspace = managedPlanWorkspace();
