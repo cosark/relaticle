@@ -122,11 +122,7 @@ final class StripeWebhookController extends CashierWebhookController
     {
         $workspace = $subscription->owner()->first();
 
-        if (! $workspace instanceof Workspace || ! $workspace->plan->isManaged()) {
-            return;
-        }
-
-        if (! $subscription->hasProduct((string) $workspace->plan->stripeProduct())) {
+        if (! $workspace instanceof Workspace || ! $workspace->planIsSoldBy($subscription)) {
             return;
         }
 

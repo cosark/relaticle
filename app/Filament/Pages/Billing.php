@@ -9,7 +9,6 @@ use App\Actions\Billing\RememberManagedRenewal;
 use App\Actions\Billing\StartProTrial;
 use App\Enums\BillingStatus;
 use App\Enums\Plan;
-use App\Enums\SubscriptionType;
 use App\Enums\WorkspaceCapability;
 use App\Features\Billing as BillingFeature;
 use App\Filament\Pages\Concerns\HasWorkspaceSettingsNavigation;
@@ -172,7 +171,7 @@ final class Billing extends Page
         $subscription = $workspace->subscription();
         $hasHostedAccess = resolve(HostedWorkspaceAccess::class)->allows($workspace);
         $isGrandfathered = $workspace->hosted_free_grandfathered_at !== null;
-        $managedSubscription = $this->managedSubscription($workspace);
+        $managedSubscription = $workspace->managedSubscription();
 
         return [
             'workspace' => $workspace,
@@ -195,23 +194,6 @@ final class Billing extends Page
             'availablePacks' => resolve(CreditPackCatalog::class)->purchasable(),
             ...($hasHostedAccess ? [] : $this->pausedViewData($workspace)),
         ];
-    }
-
-    private function managedSubscription(Workspace $workspace): ?Subscription
-    {
-        if (! $workspace->plan->isManaged()) {
-            return null;
-        }
-
-        $product = $workspace->plan->stripeProduct();
-
-        return $workspace->subscriptions
-            ->filter(fn (mixed $subscription): bool => $subscription instanceof Subscription
-                && $subscription->type === SubscriptionType::Managed->value
-                && $subscription->valid()
-                && $product !== null
-                && $subscription->hasProduct($product))
-            ->first();
     }
 
     /** @return array{renews_at: int, amount: int, currency: string}|null */

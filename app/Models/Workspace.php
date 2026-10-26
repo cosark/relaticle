@@ -412,6 +412,25 @@ final class Workspace extends Model implements HasAvatar, HasMedia, Onboardable
             );
     }
 
+    public function managedSubscription(): ?Subscription
+    {
+        $this->loadMissing('subscriptions');
+
+        return $this->subscriptions
+            ->filter(fn (mixed $subscription): bool => $subscription instanceof Subscription
+                && $subscription->type === SubscriptionType::Managed->value
+                && $subscription->valid()
+                && $this->planIsSoldBy($subscription))
+            ->first();
+    }
+
+    public function planIsSoldBy(Subscription $subscription): bool
+    {
+        $product = $this->plan->stripeProduct();
+
+        return $product !== null && $subscription->hasProduct($product);
+    }
+
     public function pendingManagedSubscription(): ?Subscription
     {
         $this->loadMissing('subscriptions');
