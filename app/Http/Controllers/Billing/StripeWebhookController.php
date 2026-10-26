@@ -186,14 +186,9 @@ final class StripeWebhookController extends CashierWebhookController
         return $this->successMethod();
     }
 
-    /**
-     * A managed plan switches on when its first invoice is paid, and nowhere
-     * else: any other paid invoice (a Pro renewal, a credit pack, a managed
-     * renewal) is none of this handler's business. A row already `managed` is
-     * admitted so a redelivery can finish a switch that failed part way.
-     *
-     * @param  array<string, mixed>  $payload
-     */
+    // Only a managed subscription's first invoice switches a plan on. A row already `managed`
+    // is admitted so a redelivery can finish a switch that failed part way.
+    /** @param  array<string, mixed>  $payload */
     protected function handleInvoicePaid(array $payload): Response
     {
         /** @var array<string, mixed> $invoice */
