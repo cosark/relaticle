@@ -150,16 +150,18 @@ How the pieces behave:
 - **`handleInvoicePaid`** acts only when all of these hold:
   - `billing_reason` is `subscription_create`,
   - `parent.subscription_details.subscription` is a string,
-  - the local row with that `stripe_id` has type `managed_pending`,
+  - the local row with that `stripe_id` has type `managed_pending`, or `managed` for a retry that finishes the switch,
   - and its workspace's `stripe_id` equals the invoice `customer`.
 
   Any other invoice returns `successMethod()`. A customer mismatch is also logged as a warning, mirroring `fulfillCreditPackCheckout()`.
 - **`ActivateManagedPlan`** retrieves the subscription from Stripe for its product and metadata. Its plan is `Plan::fromStripeProduct(product)`, and it refuses when the metadata `workspace_id` differs.
-  1. For the workspace's valid `default` subscription and every valid `managed` subscription, call `CancelWithUnusedTimeRefund` with key `"managed-switch-{$invoiceId}-{$replacedStripeId}"`.
-  2. Then, in one transaction with the workspace row locked: set the row's type to `managed` (the Stripe metadata `type` too), set `workspace->plan`, and `CreditService::resetPeriod($workspace)`.
-  3. Finally, call `RememberManagedRenewal` with the retrieved object.
+  1. Refuse unless the Stripe status is `active`, `past_due` or `trialing`. A paid invoice on a cancelled subscription grants nothing, is reported, and returns 200.
+  2. In one transaction with the workspace row locked: set the row's type to `managed`, set `workspace->plan`, and `CreditService::resetPeriod($workspace)`. Then set the Stripe metadata `type` to `managed`.
+  3. For the workspace's valid `default` subscription and every other valid `managed` subscription created at or before the invoice's `paid_at`, call `CancelWithUnusedTimeRefund` with key `"managed-switch-{$invoiceId}-{$replacedStripeId}"`.
+  4. Finally, call `RememberManagedRenewal` with the retrieved object.
 
-  A row already of type `managed` exits early. That is the idempotency marker.
+  A row already of type `managed` skips step 2 and retries step 3 while the row is still valid. A completed switch makes no Stripe write on redelivery.
+  A refund Stripe rejects for good (an invoice with no card payment, an already refunded charge, no subscription period) is reported and skipped, and the cancel still runs. A transient Stripe error returns 500 so Stripe retries.
 - **`CancelWithUnusedTimeRefund`** finds the latest paid invoice of that subscription (`invoices->all(['subscription' => id, 'status' => 'paid', 'limit' => 1])`) and its payment intent (`invoicePayments->all(['invoice' => id])`).
   - The refund is `floor(amount_paid * (period_end - now) / (period_end - period_start))`, clamped to 0..amount_paid. It is skipped at 0.
   - It calls `refunds->create([...], ['idempotency_key' => $key])`, then `$subscription->noProrate()->cancelNow()`.
