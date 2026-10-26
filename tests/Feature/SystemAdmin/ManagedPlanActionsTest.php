@@ -10,6 +10,7 @@ use App\Services\Billing\HostedWorkspaceAccess;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -477,6 +478,33 @@ it('shows withdraw while a managed invoice is waiting', function (): void {
 
     livewire(ViewWorkspace::class, ['record' => $workspace->getRouteKey()])
         ->assertActionVisible('withdrawManagedInvoice');
+});
+
+function subscriptionQueriesWhileListing(int $workspaces): int
+{
+    Workspace::query()->delete();
+
+    foreach (Workspace::factory()->count($workspaces)->create() as $workspace) {
+        unpaidManagedSubscription($workspace)->forceFill(['stripe_id' => 'sub_listing_'.Str::lower(Str::random(8))])->save();
+    }
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    livewire(ListWorkspaces::class)->assertSuccessful();
+
+    $queries = collect(DB::getQueryLog())->filter(fn (array $query): bool => str_contains($query['query'], '"subscriptions"'))->count();
+
+    DB::disableQueryLog();
+
+    return $queries;
+}
+
+it('reads the withdraw visibility from the loaded subscriptions instead of one query per workspace', function (): void {
+    $fewWorkspaces = subscriptionQueriesWhileListing(2);
+    $manyWorkspaces = subscriptionQueriesWhileListing(6);
+
+    expect($manyWorkspaces)->toBe($fewWorkspaces);
 });
 
 it('lets the sysadmin start again after withdrawing', function (): void {

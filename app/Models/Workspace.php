@@ -414,11 +414,13 @@ final class Workspace extends Model implements HasAvatar, HasMedia, Onboardable
 
     public function pendingManagedSubscription(): ?Subscription
     {
-        return Subscription::query()
-            ->where($this->getForeignKey(), $this->getKey())
-            ->where('type', SubscriptionType::ManagedPending->value)
-            ->whereNotIn('stripe_status', [StripeSubscriptionStatus::Canceled->value, StripeSubscriptionStatus::IncompleteExpired->value])
-            ->latest()
+        $this->loadMissing('subscriptions');
+
+        return $this->subscriptions
+            ->filter(fn (mixed $subscription): bool => $subscription instanceof Subscription
+                && $subscription->type === SubscriptionType::ManagedPending->value
+                && ! in_array($subscription->stripe_status, [StripeSubscriptionStatus::Canceled->value, StripeSubscriptionStatus::IncompleteExpired->value], true))
+            ->sortByDesc('created_at')
             ->first();
     }
 
