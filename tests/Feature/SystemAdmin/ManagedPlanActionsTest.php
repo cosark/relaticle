@@ -10,6 +10,7 @@ use App\Services\Billing\HostedWorkspaceAccess;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,8 @@ use Relaticle\SystemAdmin\Filament\Resources\WorkspaceResource\Pages\ViewWorkspa
 use Relaticle\SystemAdmin\Filament\Support\ManagedPlan;
 use Relaticle\SystemAdmin\Mail\ManagedPlanInvoiceMail;
 use Relaticle\SystemAdmin\Models\SystemAdministrator;
+use RuntimeException;
+use Stripe\Exception\ApiErrorException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Helpers\OverviewData;
 use Tests\Helpers\StripeRecorder;
@@ -412,7 +415,7 @@ it('cancels without voiding again when a retry finds the invoice already void', 
         ->and($this->stripe->countFor('DELETE /v1/subscriptions/sub_managed_test'))->toBe(1);
 });
 
-it('deletes a draft invoice before cancelling so Stripe never finalizes it', function (): void {
+it('finalizes then voids a draft invoice before cancelling so Stripe never collects it', function (): void {
     $workspace = managedPlanWorkspace();
     unpaidManagedSubscription($workspace);
     withLatestInvoiceStatus($this->stripe, 'draft');
@@ -420,11 +423,13 @@ it('deletes a draft invoice before cancelling so Stripe never finalizes it', fun
 
     withdrawManagedInvoiceFor($workspace)->assertNotified('Invoice withdrawn');
 
-    expect($this->stripe->countFor('POST /v1/invoices/in_managed_test/void'))->toBe(0)
-        ->and($this->stripe->writesSince($offset))->toBe([
-            ['method' => 'DELETE', 'url' => 'https://api.stripe.com/v1/invoices/in_managed_test'],
-            ['method' => 'DELETE', 'url' => 'https://api.stripe.com/v1/subscriptions/sub_managed_test'],
-        ]);
+    expect($this->stripe->writesSince($offset))->toBe([
+        ['method' => 'POST', 'url' => 'https://api.stripe.com/v1/invoices/in_managed_test/finalize'],
+        ['method' => 'POST', 'url' => 'https://api.stripe.com/v1/invoices/in_managed_test/void'],
+        ['method' => 'DELETE', 'url' => 'https://api.stripe.com/v1/subscriptions/sub_managed_test'],
+    ])
+        ->and($this->stripe->paramsFor('POST /v1/invoices/in_managed_test/finalize')['auto_advance'])->toBe('false')
+        ->and($this->stripe->paramsFor('DELETE /v1/subscriptions/sub_managed_test')['prorate'])->toBe('false');
 });
 
 it('tells the sysadmin to reload when Stripe rejects the void', function (): void {
@@ -433,12 +438,18 @@ it('tells the sysadmin to reload when Stripe rejects the void', function (): voi
     withLatestInvoiceStatus($this->stripe, 'open');
     $this->stripe->respondTo('POST /v1/invoices/in_managed_test/void', ['error' => ['type' => 'invalid_request_error', 'message' => 'You can only void open invoices.']], 400);
 
+    Exceptions::fake();
+
     withdrawManagedInvoiceFor($workspace)->assertNotified(
         Notification::make()
             ->danger()
             ->title('Invoice not withdrawn')
-            ->body('Stripe rejected the request. The invoice may have just been paid. Reload the page and check it.'),
+            ->body('Stripe did not complete the request. Reload the page: the invoice may have been paid or the request may need another try.'),
     );
+
+    Exceptions::assertReported(fn (RuntimeException $exception): bool => str_contains($exception->getMessage(), 'sub_managed_test')
+        && str_contains($exception->getMessage(), (string) $workspace->getKey())
+        && $exception->getPrevious() instanceof ApiErrorException);
 
     expect($this->stripe->countFor('DELETE /v1/subscriptions/sub_managed_test'))->toBe(0)
         ->and($subscription->refresh()->stripe_status)->toBe('incomplete');

@@ -17,6 +17,7 @@ use Laravel\Cashier\Subscription;
 use Relaticle\SystemAdmin\Actions\StartManagedPlan;
 use Relaticle\SystemAdmin\Actions\WithdrawManagedInvoice;
 use Relaticle\SystemAdmin\Models\SystemAdministrator;
+use RuntimeException;
 use Stripe\Exception\ApiErrorException;
 
 final class ManagedPlan
@@ -99,12 +100,16 @@ final class ManagedPlan
 
                     return;
                 } catch (ApiErrorException $exception) {
-                    report($exception);
+                    report(new RuntimeException(
+                        "Managed invoice withdrawal failed for subscription {$record->pendingManagedSubscription()?->stripe_id} in workspace {$record->getKey()}: {$exception->getMessage()}",
+                        0,
+                        $exception,
+                    ));
 
                     Notification::make()
                         ->danger()
                         ->title('Invoice not withdrawn')
-                        ->body('Stripe rejected the request. The invoice may have just been paid. Reload the page and check it.')
+                        ->body('Stripe did not complete the request. Reload the page: the invoice may have been paid or the request may need another try.')
                         ->send();
 
                     return;

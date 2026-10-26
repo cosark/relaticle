@@ -13,7 +13,7 @@ use Relaticle\SystemAdmin\Models\SystemAdministrator;
 
 final readonly class WithdrawManagedInvoice
 {
-    private const array VOIDABLE_STATUSES = ['open', 'uncollectible'];
+    private const array VOIDABLE_STATUSES = ['draft', 'open', 'uncollectible'];
 
     public function execute(SystemAdministrator $admin, Workspace $workspace): void
     {
@@ -32,7 +32,7 @@ final readonly class WithdrawManagedInvoice
         }
 
         if ($invoice?->status === 'draft') {
-            Cashier::stripe()->invoices->delete($invoice->id);
+            Cashier::stripe()->invoices->finalizeInvoice($invoice->id, ['auto_advance' => false]);
         }
 
         if ($invoice !== null && in_array($invoice->status, self::VOIDABLE_STATUSES, true)) {
