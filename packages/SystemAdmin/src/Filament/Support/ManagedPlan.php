@@ -52,13 +52,9 @@ final class ManagedPlan
                     ->email(),
             ])
             ->action(function (array $data, Workspace $record): void {
-                $administrator = auth('sysadmin')->user();
-
-                abort_unless($administrator instanceof SystemAdministrator, 403);
-
                 try {
                     resolve(StartManagedPlan::class)->execute(
-                        $administrator,
+                        self::administrator(),
                         $record,
                         Plan::from($data['plan']),
                         (int) $data['amount'],
@@ -67,17 +63,12 @@ final class ManagedPlan
                 } catch (ValidationException $exception) {
                     throw ValidationException::withMessages(Arr::prependKeysWith($exception->errors(), 'mountedActions.0.data.'));
                 } catch (ApiErrorException $exception) {
-                    report(new RuntimeException(
-                        "Starting a managed plan failed for workspace {$record->getKey()}: {$exception->getMessage()}",
-                        0,
+                    self::reportStripeFailure(
                         $exception,
-                    ));
-
-                    Notification::make()
-                        ->danger()
-                        ->title('Invoice not sent')
-                        ->body('Stripe did not complete the request. Reload the page before trying again: the subscription may already exist.')
-                        ->send();
+                        "Starting a managed plan failed for workspace {$record->getKey()}",
+                        'Invoice not sent',
+                        'Stripe did not complete the request. Reload the page before trying again: the subscription may already exist.',
+                    );
 
                     return;
                 }
@@ -99,12 +90,8 @@ final class ManagedPlan
             ->modalDescription("Voids the unpaid invoice and cancels the subscription. The workspace's plan does not change.")
             ->modalSubmitActionLabel('Withdraw invoice')
             ->action(function (Workspace $record): void {
-                $administrator = auth('sysadmin')->user();
-
-                abort_unless($administrator instanceof SystemAdministrator, 403);
-
                 try {
-                    resolve(WithdrawManagedInvoice::class)->execute($administrator, $record);
+                    resolve(WithdrawManagedInvoice::class)->execute(self::administrator(), $record);
                 } catch (ValidationException $exception) {
                     Notification::make()
                         ->danger()
@@ -114,23 +101,34 @@ final class ManagedPlan
 
                     return;
                 } catch (ApiErrorException $exception) {
-                    report(new RuntimeException(
-                        "Managed invoice withdrawal failed for subscription {$record->pendingManagedSubscription()?->stripe_id} in workspace {$record->getKey()}: {$exception->getMessage()}",
-                        0,
+                    self::reportStripeFailure(
                         $exception,
-                    ));
-
-                    Notification::make()
-                        ->danger()
-                        ->title('Invoice not withdrawn')
-                        ->body('Stripe did not complete the request. Reload the page: the invoice may have been paid or the request may need another try.')
-                        ->send();
+                        "Managed invoice withdrawal failed for subscription {$record->pendingManagedSubscription()?->stripe_id} in workspace {$record->getKey()}",
+                        'Invoice not withdrawn',
+                        'Stripe did not complete the request. Reload the page: the invoice may have been paid or the request may need another try.',
+                    );
 
                     return;
                 }
 
                 Notification::make()->title('Invoice withdrawn')->success()->send();
             });
+    }
+
+    private static function administrator(): SystemAdministrator
+    {
+        $administrator = auth('sysadmin')->user();
+
+        abort_unless($administrator instanceof SystemAdministrator, 403);
+
+        return $administrator;
+    }
+
+    private static function reportStripeFailure(ApiErrorException $exception, string $context, string $title, string $body): void
+    {
+        report(new RuntimeException("{$context}: {$exception->getMessage()}", 0, $exception));
+
+        Notification::make()->danger()->title($title)->body($body)->send();
     }
 
     /** @return array<string, string> */
