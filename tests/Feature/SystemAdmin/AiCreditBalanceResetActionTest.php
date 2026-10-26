@@ -110,3 +110,21 @@ it('points a workspace with a valid Pro subscription to Start managed plan', fun
         ->assertMountedActionModalSee('Start managed plan')
         ->assertMountedActionModalDontSee('Cancel the subscription in Stripe first');
 });
+
+it('warns that webhook sync restores a paid managed plan', function (): void {
+    $workspace = Workspace::factory()->create();
+    $workspace->subscriptions()->create([
+        'type' => 'managed',
+        'stripe_id' => 'sub_reset_managed_warning',
+        'stripe_status' => 'active',
+        'stripe_price' => 'price_inline_reset_managed',
+        'quantity' => 1,
+    ]);
+    AiCreditBalance::query()->where('workspace_id', $workspace->getKey())->delete();
+    $balance = AiCreditBalance::factory()->create(['workspace_id' => $workspace->getKey()]);
+
+    livewire(ListAiCreditBalances::class)
+        ->mountAction(TestAction::make('resetPeriod')->table($balance))
+        ->assertMountedActionModalSee('Webhook sync restores that plan')
+        ->assertMountedActionModalDontSee('Start managed plan');
+});

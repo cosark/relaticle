@@ -6,6 +6,7 @@ namespace Relaticle\SystemAdmin\Filament\Resources;
 
 use App\Enums\BillingStatus;
 use App\Enums\Plan;
+use App\Enums\SubscriptionType;
 use Carbon\CarbonInterface;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -249,6 +250,9 @@ final class AiCreditBalanceResource extends Resource
             ->modalDescription(fn (AiCreditBalance $record): string => 'Wipes credits_used and grants the allowance for the chosen plan. Starts a fresh monthly period.'
                 .(($record->workspace->subscription()?->valid() ?? false)
                     ? ' WARNING: this workspace has an active Stripe subscription. Webhook sync re-asserts the subscribed plan over a Free or Pro grant. To bill Cloud Concierge or Enterprise, use Start managed plan on the workspace page instead.'
+                    : '')
+                .(($record->workspace->subscription(SubscriptionType::Managed->value)?->valid() ?? false)
+                    ? ' WARNING: this workspace has a paid Cloud Concierge or Enterprise subscription. Webhook sync restores that plan. Cancel the subscription in Stripe first.'
                     : ''))
             ->schema([
                 Select::make('plan')
