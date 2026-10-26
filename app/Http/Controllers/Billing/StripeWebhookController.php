@@ -8,6 +8,7 @@ use App\Actions\Billing\GrantPurchasedCredits;
 use App\Actions\Billing\NotifyWorkspaceOfPaymentFailure;
 use App\Actions\Billing\RestoreWorkspaceTrial;
 use App\Enums\StripeSubscriptionStatus;
+use App\Enums\SubscriptionType;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Cashier;
@@ -37,7 +38,8 @@ final class StripeWebhookController extends CashierWebhookController
     /**
      * Cashier clears the billable's generic trial for every created
      * subscription, including one that never charged. Restore it so an
-     * abandoned checkout leaves the workspace's running trial intact.
+     * abandoned checkout or an unpaid managed invoice leaves the workspace's
+     * running trial intact.
      *
      * @param  array<string, mixed>  $payload
      */
@@ -46,7 +48,10 @@ final class StripeWebhookController extends CashierWebhookController
         /** @var array<string, mixed> $object */
         $object = $payload['data']['object'] ?? [];
 
-        if (! in_array($object['status'] ?? null, StripeSubscriptionStatus::neverGranted(), true)) {
+        $grantsNothingYet = in_array($object['status'] ?? null, StripeSubscriptionStatus::neverGranted(), true)
+            || ($object['metadata']['type'] ?? null) === SubscriptionType::ManagedPending->value;
+
+        if (! $grantsNothingYet) {
             return parent::handleCustomerSubscriptionCreated($payload);
         }
 

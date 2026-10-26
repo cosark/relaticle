@@ -19,6 +19,7 @@ return [
             'contact' => 'You received this because someone submitted the contact form.',
             'account' => 'You received this because of a request on your :company account.',
             'onboarding' => 'You received this because you created a :company workspace.',
+            'billing_contact' => 'You received this because you are the billing contact for :workspace.',
         ],
     ],
 
@@ -61,6 +62,14 @@ return [
         'grandfathered' => ':workspace is back on its grandfathered Cloud Free plan. Your data is untouched, and you can return to Pro at any time.',
         'cta' => 'Subscribe to Pro',
         'cta_grandfathered' => 'Upgrade to Pro',
+    ],
+
+    'managed_plan_invoice' => [
+        'subject' => 'Your :plan invoice from Relaticle',
+        'preheader' => 'Your yearly :plan invoice for :workspace is ready',
+        'heading' => 'Your :plan invoice is ready',
+        'line' => 'Relaticle sent an invoice for :amount a year for :workspace on the :plan plan. The plan switches on when it is paid.',
+        'cta' => 'View and pay the invoice',
     ],
 
     'setup_nudge' => [

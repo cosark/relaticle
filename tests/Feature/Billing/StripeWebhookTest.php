@@ -352,6 +352,20 @@ it('does not consume the generic trial when a checkout is abandoned as incomplet
         ->and($workspace->onGenericTrial())->toBeTrue();
 });
 
+it('keeps the generic trial when a managed subscription is created awaiting its first payment', function (): void {
+    $workspace = stripeBillingWorkspace();
+    $trialEndsAt = now()->addDays(10)->startOfSecond();
+    $workspace->forceFill(['plan' => Plan::Pro, 'trial_ends_at' => $trialEndsAt])->save();
+
+    sendStripeWebhook(stripeSubscriptionEvent($workspace, 'created', ['metadata' => ['type' => 'managed_pending', 'workspace_id' => (string) $workspace->getKey()]]))->assertSuccessful();
+
+    $workspace->refresh();
+
+    expect(Subscription::query()->where('stripe_id', 'sub_test_1')->sole()->type)->toBe('managed_pending')
+        ->and($workspace->plan)->toBe(Plan::Pro)
+        ->and($workspace->trial_ends_at?->timestamp)->toBe($trialEndsAt->timestamp);
+});
+
 it('never double-grants across a mid-trial conversion', function (): void {
     test()->travelTo(new DateTimeImmutable('2026-06-25 12:00:00', new DateTimeZone('UTC')));
 
