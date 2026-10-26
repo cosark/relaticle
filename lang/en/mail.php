@@ -263,6 +263,7 @@ return [
 
     'contact_submission' => [
         'subject' => 'New contact: :name',
+        'inquiry_subject' => 'New :plan inquiry: :name',
         'preheader' => ':company, :email',
         'preheader_without_company' => ':email',
         'heading' => 'New contact form message',
