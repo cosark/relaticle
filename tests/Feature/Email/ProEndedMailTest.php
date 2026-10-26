@@ -93,3 +93,13 @@ it('says email and calendar sync are paused only when the workspace has a mailbo
 
     ProEndedMail::afterTrial($workspace)->assertSeeInHtml(__('mail.pro_ended.mailbox_sync_paused'));
 });
+
+it('says mailbox sync resumes with the managed plan, not a subscription', function (): void {
+    $workspace = proEndedWorkspace();
+    ConnectedAccount::withoutEvents(fn (): ConnectedAccount => ConnectedAccount::factory()->create(['workspace_id' => $workspace->id]));
+
+    $mail = ProEndedMail::afterManagedPlan($workspace, Plan::Concierge);
+
+    $mail->assertSeeInHtml(__('mail.pro_ended.managed_ended.mailbox_sync_paused', ['plan' => 'Cloud Concierge']));
+    $mail->assertDontSeeInHtml(__('mail.pro_ended.mailbox_sync_paused'));
+});

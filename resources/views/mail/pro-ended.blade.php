@@ -8,7 +8,7 @@
 {{ __('mail.pro_ended.paused', ['workspace' => $workspace->name]) }}
 @if($mailboxSyncPaused)
 
-{{ __('mail.pro_ended.mailbox_sync_paused') }}
+{{ $managedPlan ? __('mail.pro_ended.managed_ended.mailbox_sync_paused', ['plan' => $managedPlan]) : __('mail.pro_ended.mailbox_sync_paused') }}
 @endif
 
 {{ $managedPlan ? __('mail.pro_ended.managed_ended.restore', ['plan' => $managedPlan]) : __('mail.pro_ended.restore') }}

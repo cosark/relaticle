@@ -61,6 +61,7 @@ return [
             'grandfathered' => ':workspace is back on its grandfathered Cloud Free plan. Your data is untouched.',
             'restore' => 'Talk to us to restart :plan. Your records stay as they are.',
             'cta' => 'Talk to us',
+            'mailbox_sync_paused' => 'Email and calendar sync are paused too, and resume when :plan restarts.',
         ],
         'preheader' => 'Your records are safe. Subscribe to reopen the workspace.',
         'preheader_grandfathered' => 'Your workspace is back on its Cloud Free plan.',
