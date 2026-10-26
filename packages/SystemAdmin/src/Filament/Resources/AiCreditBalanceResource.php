@@ -248,7 +248,7 @@ final class AiCreditBalanceResource extends Resource
             ->modalHeading('Reset billing period')
             ->modalDescription(fn (AiCreditBalance $record): string => 'Wipes credits_used and grants the allowance for the chosen plan. Starts a fresh monthly period.'
                 .(($record->workspace->subscription()?->valid() ?? false)
-                    ? ' WARNING: this workspace has an active Stripe subscription, so webhook sync will re-assert the subscribed plan. Cancel the subscription in Stripe first.'
+                    ? ' WARNING: this workspace has an active Stripe subscription. Webhook sync re-asserts the subscribed plan over a Free or Pro grant. To bill Cloud Concierge or Enterprise, use Start managed plan on the workspace page instead.'
                     : ''))
             ->schema([
                 Select::make('plan')

@@ -92,3 +92,21 @@ it('renders all Plan enum cases as reset-action plan options', function (): void
         ->assertMountedActionModalSee('Pro')
         ->assertMountedActionModalSee('Enterprise');
 });
+
+it('points a workspace with a valid Pro subscription to Start managed plan', function (): void {
+    $workspace = Workspace::factory()->create();
+    $workspace->subscriptions()->create([
+        'type' => 'default',
+        'stripe_id' => 'sub_reset_warning',
+        'stripe_status' => 'active',
+        'stripe_price' => 'price_pro_monthly_test',
+        'quantity' => 1,
+    ]);
+    AiCreditBalance::query()->where('workspace_id', $workspace->getKey())->delete();
+    $balance = AiCreditBalance::factory()->create(['workspace_id' => $workspace->getKey()]);
+
+    livewire(ListAiCreditBalances::class)
+        ->mountAction(TestAction::make('resetPeriod')->table($balance))
+        ->assertMountedActionModalSee('Start managed plan')
+        ->assertMountedActionModalDontSee('Cancel the subscription in Stripe first');
+});
