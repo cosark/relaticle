@@ -277,7 +277,6 @@ final readonly class ChatController
             'message' => "You have used all {$allowance} credits for this {$workspace->plan->getLabel()} plan period.",
             'plan' => $workspace->plan->value,
             'allowance' => $allowance,
-            'reset_at' => $balance?->period_ends_at?->toIso8601String(),
             'reset_on' => $balance?->period_ends_at?->toFormattedDateString(),
             'upgrade_available' => $isFree,
             'upgrade_url' => $isFree ? $this->billingUrl($workspace) : null,

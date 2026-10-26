@@ -50,7 +50,7 @@ it('returns plan-aware copy when a Free user is out of credits', function (): vo
         'message',
         'plan',
         'allowance',
-        'reset_at',
+        'reset_on',
         'upgrade_available',
     ]);
     expect($response->json('error'))->toBe('credits_exhausted');
