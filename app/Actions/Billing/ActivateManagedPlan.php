@@ -46,8 +46,6 @@ final readonly class ActivateManagedPlan
             return;
         }
 
-        $workspace->refresh();
-
         $this->finishSwitch($workspace, $stripeSubscription, $invoiceId);
 
         Log::info('Managed plan switched on', [
@@ -105,8 +103,8 @@ final readonly class ActivateManagedPlan
             ->whereIn('type', [SubscriptionType::Default->value, SubscriptionType::Managed->value])
             ->where('stripe_id', '!=', $activatedId)
             ->where('created_at', '<=', $paidAt)
-            ->with('owner')
             ->get()
+            ->each->setRelation('owner', $workspace)
             ->filter(fn (Subscription $subscription): bool => $subscription->valid() || $subscription->stripe_status === StripeSubscriptionStatus::Unpaid->value);
 
         foreach ($replaced as $subscription) {
