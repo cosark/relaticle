@@ -31,11 +31,15 @@ final readonly class WithdrawManagedInvoice
             $this->refuse('The invoice is already paid. The plan switches on when Stripe confirms the payment.');
         }
 
+        if ($invoice?->status === 'draft') {
+            Cashier::stripe()->invoices->delete($invoice->id);
+        }
+
         if ($invoice !== null && in_array($invoice->status, self::VOIDABLE_STATUSES, true)) {
             Cashier::stripe()->invoices->voidInvoice($invoice->id);
         }
 
-        $subscription->cancelNow();
+        $subscription->noProrate()->cancelNow();
     }
 
     private function refuse(string $message): never

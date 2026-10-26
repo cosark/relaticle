@@ -367,6 +367,7 @@ it('voids the unpaid invoice and cancels its subscription', function (): void {
 
     expect($this->stripe->countFor('POST /v1/invoices/in_managed_test/void'))->toBe(1)
         ->and($this->stripe->countFor('DELETE /v1/subscriptions/sub_managed_test'))->toBe(1)
+        ->and($this->stripe->paramsFor('DELETE /v1/subscriptions/sub_managed_test')['prorate'])->toBe('false')
         ->and($subscription->refresh()->stripe_status)->toBe('canceled')
         ->and($subscription->ends_at)->not->toBeNull()
         ->and($workspace->refresh()->plan)->toBe(Plan::Free);
@@ -409,6 +410,38 @@ it('cancels without voiding again when a retry finds the invoice already void', 
 
     expect($this->stripe->countFor('POST /v1/invoices/in_managed_test/void'))->toBe(0)
         ->and($this->stripe->countFor('DELETE /v1/subscriptions/sub_managed_test'))->toBe(1);
+});
+
+it('deletes a draft invoice before cancelling so Stripe never finalizes it', function (): void {
+    $workspace = managedPlanWorkspace();
+    unpaidManagedSubscription($workspace);
+    withLatestInvoiceStatus($this->stripe, 'draft');
+    $offset = count($this->stripe->requests);
+
+    withdrawManagedInvoiceFor($workspace)->assertNotified('Invoice withdrawn');
+
+    expect($this->stripe->countFor('POST /v1/invoices/in_managed_test/void'))->toBe(0)
+        ->and($this->stripe->writesSince($offset))->toBe([
+            ['method' => 'DELETE', 'url' => 'https://api.stripe.com/v1/invoices/in_managed_test'],
+            ['method' => 'DELETE', 'url' => 'https://api.stripe.com/v1/subscriptions/sub_managed_test'],
+        ]);
+});
+
+it('tells the sysadmin to reload when Stripe rejects the void', function (): void {
+    $workspace = managedPlanWorkspace();
+    $subscription = unpaidManagedSubscription($workspace);
+    withLatestInvoiceStatus($this->stripe, 'open');
+    $this->stripe->respondTo('POST /v1/invoices/in_managed_test/void', ['error' => ['type' => 'invalid_request_error', 'message' => 'You can only void open invoices.']], 400);
+
+    withdrawManagedInvoiceFor($workspace)->assertNotified(
+        Notification::make()
+            ->danger()
+            ->title('Invoice not withdrawn')
+            ->body('Stripe rejected the request. The invoice may have just been paid. Reload the page and check it.'),
+    );
+
+    expect($this->stripe->countFor('DELETE /v1/subscriptions/sub_managed_test'))->toBe(0)
+        ->and($subscription->refresh()->stripe_status)->toBe('incomplete');
 });
 
 it('hides withdraw when no managed invoice is waiting', function (?string $status): void {
