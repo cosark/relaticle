@@ -125,6 +125,6 @@ it('warns that webhook sync restores a paid managed plan', function (): void {
 
     livewire(ListAiCreditBalances::class)
         ->mountAction(TestAction::make('resetPeriod')->table($balance))
-        ->assertMountedActionModalSee('Webhook sync restores that plan')
+        ->assertMountedActionModalSee('Webhook sync restores that plan over a Free grant')
         ->assertMountedActionModalDontSee('Start managed plan');
 });

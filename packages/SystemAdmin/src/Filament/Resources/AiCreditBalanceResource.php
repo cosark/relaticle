@@ -252,7 +252,7 @@ final class AiCreditBalanceResource extends Resource
                     ? ' WARNING: this workspace has an active Stripe subscription. Webhook sync re-asserts the subscribed plan over a Free or Pro grant. To bill Cloud Concierge or Enterprise, use Start managed plan on the workspace page instead.'
                     : '')
                 .(($record->workspace->subscription(SubscriptionType::Managed->value)?->valid() ?? false)
-                    ? ' WARNING: this workspace has a paid Cloud Concierge or Enterprise subscription. Webhook sync restores that plan. Cancel the subscription in Stripe first.'
+                    ? ' WARNING: this workspace has a paid Cloud Concierge or Enterprise subscription. Webhook sync restores that plan over a Free grant. Cancel the subscription in Stripe first.'
                     : ''))
             ->schema([
                 Select::make('plan')
