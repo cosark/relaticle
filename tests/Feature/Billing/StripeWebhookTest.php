@@ -690,6 +690,10 @@ it('notifies nobody for a customer that belongs to no workspace', function (): v
     expect($workspace->owner->notifications()->count())->toBe(0);
 });
 
+it('subscribes the Stripe endpoint to paid invoices', function (): void {
+    expect(config('cashier.webhook.events'))->toContain('invoice.paid');
+});
+
 it('subscribes the Stripe endpoint to the failed-payment event', function (): void {
     expect(config('cashier.webhook.events'))->toContain('invoice.payment_failed');
 });

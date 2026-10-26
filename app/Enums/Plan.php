@@ -30,6 +30,21 @@ enum Plan: string implements HasColor, HasLabel
         return $key === null ? null : self::tryFrom(explode('_', $key)[0]);
     }
 
+    public static function fromStripeProduct(?string $productId): ?self
+    {
+        if ($productId === null) {
+            return null;
+        }
+
+        foreach (self::cases() as $plan) {
+            if ($plan->stripeProduct() === $productId) {
+                return $plan;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * The human label for a Stripe price id, `Pro · monthly`. Falls back to the
      * id itself when it is not in the price map, so an unmapped price is still
@@ -142,6 +157,27 @@ enum Plan: string implements HasColor, HasLabel
         return match ($this) {
             self::Free, self::Pro => false,
             self::Concierge, self::Enterprise => true,
+        };
+    }
+
+    public function stripeProduct(): ?string
+    {
+        /** @var ?string $product */
+        $product = match ($this) {
+            self::Free, self::Pro => null,
+            self::Concierge => config('services.stripe.products.concierge'),
+            self::Enterprise => config('services.stripe.products.enterprise'),
+        };
+
+        return $product === '' ? null : $product;
+    }
+
+    public function defaultYearlyPrice(): ?int
+    {
+        return match ($this) {
+            self::Free, self::Pro => null,
+            self::Concierge => config()->integer('relaticle.concierge.price_yearly'),
+            self::Enterprise => config()->integer('relaticle.enterprise.starting_price_yearly'),
         };
     }
 }
