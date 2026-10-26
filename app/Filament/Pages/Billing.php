@@ -203,20 +203,15 @@ final class Billing extends Page
             return null;
         }
 
-        return Subscription::query()
-            ->where($workspace->getForeignKey(), $workspace->getKey())
-            ->where('type', SubscriptionType::Managed->value)
-            ->latest()
-            ->get()
-            ->first(fn (Subscription $row): bool => $row->valid()
-                && Plan::fromStripeProduct($this->stripeProductOf($row)) === $workspace->plan);
-    }
+        $product = $workspace->plan->stripeProduct();
 
-    private function stripeProductOf(Subscription $subscription): ?string
-    {
-        $product = $subscription->items()->value('stripe_product');
-
-        return is_string($product) ? $product : null;
+        return $workspace->subscriptions
+            ->filter(fn (mixed $subscription): bool => $subscription instanceof Subscription
+                && $subscription->type === SubscriptionType::Managed->value
+                && $subscription->valid()
+                && $product !== null
+                && $subscription->hasProduct($product))
+            ->first();
     }
 
     /** @return array{renews_at: int, amount: int, currency: string}|null */
