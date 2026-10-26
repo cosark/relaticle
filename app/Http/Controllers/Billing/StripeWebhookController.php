@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Billing;
 
+use App\Actions\Billing\ActivateManagedPlan;
 use App\Actions\Billing\GrantPurchasedCredits;
 use App\Actions\Billing\NotifyWorkspaceOfPaymentFailure;
 use App\Actions\Billing\RestoreWorkspaceTrial;
@@ -13,6 +14,7 @@ use App\Models\Workspace;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierWebhookController;
+use Laravel\Cashier\Subscription;
 use Symfony\Component\HttpFoundation\Response;
 
 final class StripeWebhookController extends CashierWebhookController
@@ -31,6 +33,7 @@ final class StripeWebhookController extends CashierWebhookController
         private readonly RestoreWorkspaceTrial $restoreTrial,
         private readonly GrantPurchasedCredits $grantCredits,
         private readonly NotifyWorkspaceOfPaymentFailure $notifyPaymentFailure,
+        private readonly ActivateManagedPlan $activateManagedPlan,
     ) {
         parent::__construct();
     }
@@ -127,6 +130,52 @@ final class StripeWebhookController extends CashierWebhookController
         if ($workspace instanceof Workspace) {
             $this->notifyPaymentFailure->execute($workspace);
         }
+
+        return $this->successMethod();
+    }
+
+    /**
+     * A managed plan switches on when its first invoice is paid, and nowhere
+     * else: any other paid invoice (a Pro renewal, a credit pack, a managed
+     * renewal) is none of this handler's business.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function handleInvoicePaid(array $payload): Response
+    {
+        /** @var array<string, mixed> $invoice */
+        $invoice = $payload['data']['object'] ?? [];
+        $stripeSubscriptionId = $invoice['parent']['subscription_details']['subscription'] ?? null;
+
+        if (($invoice['billing_reason'] ?? null) !== 'subscription_create' || ! is_string($stripeSubscriptionId)) {
+            return $this->successMethod();
+        }
+
+        $subscription = Subscription::query()
+            ->where('stripe_id', $stripeSubscriptionId)
+            ->where('type', SubscriptionType::ManagedPending->value)
+            ->first();
+        $workspace = $subscription?->owner()->first();
+
+        if (! $workspace instanceof Workspace) {
+            return $this->successMethod();
+        }
+
+        $customer = $invoice['customer'] ?? null;
+        $invoiceId = $invoice['id'] ?? null;
+
+        if (! is_string($customer) || ! is_string($invoiceId) || $workspace->stripe_id !== $customer) {
+            Log::warning('Managed plan invoice ignored: workspace/customer mismatch', [
+                'workspace_id' => $workspace->getKey(),
+                'customer' => $customer,
+                'expected_customer' => $workspace->stripe_id,
+                'invoice_id' => $invoiceId,
+            ]);
+
+            return $this->successMethod();
+        }
+
+        $this->activateManagedPlan->execute($workspace, $stripeSubscriptionId, $invoiceId);
 
         return $this->successMethod();
     }

@@ -2,13 +2,17 @@
 
 declare(strict_types=1);
 
+use App\Actions\Billing\ActivateManagedPlan;
+use App\Actions\Billing\CancelWithUnusedTimeRefund;
 use App\Actions\Billing\GrantPurchasedCredits;
 use App\Actions\Billing\NotifyWorkspaceOfPaymentFailure;
+use App\Actions\Billing\RememberManagedRenewal;
 use App\Actions\Billing\StartProTrial;
 use App\Actions\Billing\SyncWorkspacePlanFromSubscription;
 use App\Enums\BillingStatus;
 use App\Enums\Notifications\NotificationReason;
 use App\Enums\Plan;
+use App\Enums\SubscriptionType;
 use App\Filament\Pages\Billing;
 use App\Http\Controllers\Billing\StripeWebhookController;
 use App\Listeners\Billing\SyncPlanOnStripeSubscriptionChange;
@@ -18,6 +22,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\PaymentFailedNotification;
 use App\Support\CurrentWorkspace;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -29,6 +34,7 @@ use Relaticle\Chat\Models\AiCreditTransaction;
 use Relaticle\Chat\Services\CreditService;
 use Relaticle\SystemAdmin\Actions\TransferWorkspaceBilling;
 use Relaticle\SystemAdmin\Models\SystemAdministrator;
+use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\AuthenticationException;
 use Tests\Helpers\StripeRecorder;
 
@@ -36,6 +42,9 @@ mutates(SyncWorkspacePlanFromSubscription::class);
 mutates(SyncPlanOnStripeSubscriptionChange::class);
 mutates(GrantPurchasedCredits::class);
 mutates(NotifyWorkspaceOfPaymentFailure::class);
+mutates(ActivateManagedPlan::class);
+mutates(CancelWithUnusedTimeRefund::class);
+mutates(RememberManagedRenewal::class);
 mutates(PaymentFailedNotification::class);
 
 beforeEach(function (): void {
@@ -709,6 +718,340 @@ it('notifies nobody for a customer that belongs to no workspace', function (): v
     sendStripeWebhook(invoicePaymentFailedEvent($workspace, ['customer' => 'cus_unknown']))->assertOk();
 
     expect($workspace->owner->notifications()->count())->toBe(0);
+});
+
+/**
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function invoicePaidEvent(Workspace $workspace, array $overrides = []): array
+{
+    return [
+        'id' => 'evt_'.Str::ulid(),
+        'type' => 'invoice.paid',
+        'data' => [
+            'object' => array_merge([
+                'id' => 'in_managed_1',
+                'object' => 'invoice',
+                'customer' => $workspace->stripe_id,
+                'billing_reason' => 'subscription_create',
+                'parent' => [
+                    'type' => 'subscription_details',
+                    'subscription_details' => ['subscription' => 'sub_managed_1'],
+                ],
+            ], $overrides),
+        ],
+    ];
+}
+
+function pendingManagedSubscription(Workspace $workspace, string $stripeId = 'sub_managed_1', string $type = 'managed_pending'): Subscription
+{
+    return $workspace->subscriptions()->create([
+        'type' => $type,
+        'stripe_id' => $stripeId,
+        'stripe_status' => 'active',
+        'stripe_price' => 'price_inline_'.$stripeId,
+        'quantity' => 1,
+    ]);
+}
+
+function proSubscriptionOn(Workspace $workspace, string $stripeId = 'sub_pro_1', string $status = 'active'): Subscription
+{
+    return $workspace->subscriptions()->create([
+        'type' => 'default',
+        'stripe_id' => $stripeId,
+        'stripe_status' => $status,
+        'stripe_price' => 'price_pro_monthly_test',
+        'quantity' => 1,
+        'trial_ends_at' => $status === 'trialing' ? now()->addDays(5) : null,
+    ]);
+}
+
+/**
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function stripeManagedSubscriptionBody(Workspace $workspace, Plan $plan = Plan::Concierge, string $id = 'sub_managed_1', array $overrides = []): array
+{
+    return array_merge([
+        'id' => $id,
+        'object' => 'subscription',
+        'customer' => $workspace->stripe_id,
+        'status' => 'active',
+        'metadata' => ['workspace_id' => (string) $workspace->getKey(), 'type' => 'managed_pending'],
+        'items' => [
+            'object' => 'list',
+            'data' => [[
+                'id' => 'si_'.$id,
+                'object' => 'subscription_item',
+                'current_period_end' => now()->addYear()->getTimestamp(),
+                'price' => [
+                    'id' => 'price_inline_'.$id,
+                    'object' => 'price',
+                    'product' => $plan->stripeProduct(),
+                    'unit_amount' => 70800,
+                    'currency' => 'usd',
+                ],
+            ]],
+        ],
+    ], $overrides);
+}
+
+function stripeManagedSwitch(Workspace $workspace, int $amountPaid = 2400, Plan $plan = Plan::Concierge, string $id = 'sub_managed_1'): StripeRecorder
+{
+    config()->set('services.stripe.products.concierge', 'prod_concierge_test');
+    config()->set('services.stripe.products.enterprise', 'prod_enterprise_test');
+
+    return StripeRecorder::install()
+        ->respondTo("/v1/subscriptions/{$id}", stripeManagedSubscriptionBody($workspace, $plan, $id))
+        ->respondTo('/v1/invoices', [
+            'object' => 'list',
+            'has_more' => false,
+            'data' => [[
+                'id' => 'in_pro_1',
+                'object' => 'invoice',
+                'amount_paid' => $amountPaid,
+                'lines' => [
+                    'object' => 'list',
+                    'data' => [[
+                        'period' => [
+                            'start' => now()->subDays(15)->getTimestamp(),
+                            'end' => now()->addDays(15)->getTimestamp(),
+                        ],
+                    ]],
+                ],
+            ]],
+        ])
+        ->respondTo('/v1/invoice_payments', [
+            'object' => 'list',
+            'has_more' => false,
+            'data' => [['id' => 'inpay_1', 'object' => 'invoice_payment', 'payment' => ['type' => 'payment_intent', 'payment_intent' => 'pi_pro_1']]],
+        ])
+        ->respondTo('/v1/refunds', ['id' => 're_1', 'object' => 'refund', 'status' => 'succeeded']);
+}
+
+function resetRowsFor(Workspace $workspace): int
+{
+    return AiCreditTransaction::query()
+        ->where('workspace_id', $workspace->getKey())
+        ->get()
+        ->filter(fn (AiCreditTransaction $transaction): bool => ($transaction->metadata['action'] ?? null) === 'reset_period')
+        ->count();
+}
+
+it('switches a managed plan on when its first invoice is paid', function (): void {
+    $workspace = stripeBillingWorkspace();
+    pendingManagedSubscription($workspace);
+    stripeManagedSwitch($workspace);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    $balance = AiCreditBalance::query()->where('workspace_id', $workspace->getKey())->sole();
+
+    expect(Subscription::query()->where('stripe_id', 'sub_managed_1')->sole()->type)->toBe(SubscriptionType::Managed->value)
+        ->and($workspace->refresh()->plan)->toBe(Plan::Concierge)
+        ->and($balance->credits_remaining)->toBe(5000);
+});
+
+it('marks the Stripe subscription as managed once it is paid', function (): void {
+    $workspace = stripeBillingWorkspace();
+    pendingManagedSubscription($workspace);
+    $recorder = stripeManagedSwitch($workspace);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    expect($recorder->lastParamsFor('/v1/subscriptions/sub_managed_1'))->toBe(['metadata' => ['type' => 'managed']]);
+});
+
+it('cancels Pro and refunds its unused time when the managed invoice is paid', function (): void {
+    $this->travelTo(now()->startOfSecond());
+
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Pro])->save();
+    proSubscriptionOn($workspace);
+    pendingManagedSubscription($workspace);
+    $recorder = stripeManagedSwitch($workspace);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    $proRow = Subscription::query()->where('stripe_id', 'sub_pro_1')->sole();
+
+    expect($recorder->paramsFor('/v1/refunds'))->toMatchArray(['amount' => 1200, 'payment_intent' => 'pi_pro_1'])
+        ->and($recorder->headersFor('/v1/refunds'))->toContain('Idempotency-Key: managed-switch-in_managed_1-sub_pro_1')
+        ->and($recorder->paramsFor('/v1/subscriptions/sub_pro_1'))->toBe(['prorate' => 'false'])
+        ->and($proRow->stripe_status)->toBe('canceled')
+        ->and($proRow->ended())->toBeTrue()
+        ->and($workspace->refresh()->plan)->toBe(Plan::Concierge);
+});
+
+it('switches a Pro trial with no refund', function (): void {
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Pro])->save();
+    proSubscriptionOn($workspace, status: 'trialing');
+    pendingManagedSubscription($workspace);
+    $recorder = stripeManagedSwitch($workspace, amountPaid: 0);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    expect($recorder->countFor('/v1/refunds'))->toBe(0)
+        ->and($recorder->countFor('/v1/subscriptions/sub_pro_1'))->toBe(1)
+        ->and(Subscription::query()->where('stripe_id', 'sub_pro_1')->sole()->ended())->toBeTrue()
+        ->and($workspace->refresh()->plan)->toBe(Plan::Concierge);
+});
+
+it('replaces an older managed subscription without ending the plan', function (): void {
+    $this->travelTo(now()->startOfSecond());
+    Mail::fake();
+
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    pendingManagedSubscription($workspace, 'sub_managed_old', 'managed');
+    pendingManagedSubscription($workspace, 'sub_managed_new');
+    $recorder = stripeManagedSwitch($workspace, plan: Plan::Enterprise, id: 'sub_managed_new');
+
+    sendStripeWebhook(invoicePaidEvent($workspace, [
+        'parent' => ['type' => 'subscription_details', 'subscription_details' => ['subscription' => 'sub_managed_new']],
+    ]))->assertOk();
+
+    expect($recorder->paramsFor('/v1/refunds'))->toMatchArray(['amount' => 1200])
+        ->and($recorder->headersFor('/v1/refunds'))->toContain('Idempotency-Key: managed-switch-in_managed_1-sub_managed_old')
+        ->and(Subscription::query()->where('stripe_id', 'sub_managed_old')->sole()->ended())->toBeTrue()
+        ->and(Subscription::query()->where('stripe_id', 'sub_managed_new')->sole()->type)->toBe(SubscriptionType::Managed->value)
+        ->and($workspace->refresh()->plan)->toBe(Plan::Enterprise);
+
+    Mail::assertNotQueued(ProEndedMail::class);
+});
+
+it('grants and refunds once when Stripe redelivers the paid invoice', function (): void {
+    $this->travelTo(now()->startOfSecond());
+
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Pro])->save();
+    proSubscriptionOn($workspace);
+    pendingManagedSubscription($workspace);
+    $recorder = stripeManagedSwitch($workspace);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    AiCreditBalance::query()->where('workspace_id', $workspace->getKey())->update([
+        'credits_remaining' => Plan::Concierge->credits() - 5,
+        'credits_used' => 5,
+    ]);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    $balance = AiCreditBalance::query()->where('workspace_id', $workspace->getKey())->sole();
+
+    expect($recorder->countFor('/v1/refunds'))->toBe(1)
+        ->and(resetRowsFor($workspace))->toBe(1)
+        ->and($balance->credits_used)->toBe(5)
+        ->and($workspace->refresh()->plan)->toBe(Plan::Concierge);
+});
+
+it('ignores a paid invoice that does not belong to a pending managed subscription', function (): void {
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Pro])->save();
+    proSubscriptionOn($workspace);
+    pendingManagedSubscription($workspace, 'sub_managed_paid', 'managed');
+    $recorder = StripeRecorder::install();
+
+    $proFirstInvoice = invoicePaidEvent($workspace, [
+        'parent' => ['type' => 'subscription_details', 'subscription_details' => ['subscription' => 'sub_pro_1']],
+    ]);
+    $proRenewal = invoicePaidEvent($workspace, [
+        'billing_reason' => 'subscription_cycle',
+        'parent' => ['type' => 'subscription_details', 'subscription_details' => ['subscription' => 'sub_pro_1']],
+    ]);
+    $managedRenewal = invoicePaidEvent($workspace, [
+        'billing_reason' => 'subscription_cycle',
+        'parent' => ['type' => 'subscription_details', 'subscription_details' => ['subscription' => 'sub_managed_paid']],
+    ]);
+    $creditPack = invoicePaidEvent($workspace, ['parent' => null]);
+    $unknownSubscription = invoicePaidEvent($workspace, [
+        'parent' => ['type' => 'subscription_details', 'subscription_details' => ['subscription' => 'sub_unknown']],
+    ]);
+
+    foreach ([$proFirstInvoice, $proRenewal, $managedRenewal, $creditPack, $unknownSubscription] as $event) {
+        sendStripeWebhook($event)->assertOk();
+    }
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Pro)
+        ->and($recorder->requests)->toBe([])
+        ->and(Subscription::query()->where('stripe_id', 'sub_pro_1')->sole()->ended())->toBeFalse();
+});
+
+it('ignores a paid invoice whose customer is not the workspace\'s', function (): void {
+    $workspace = stripeBillingWorkspace();
+    pendingManagedSubscription($workspace);
+    $recorder = StripeRecorder::install();
+
+    Log::spy();
+
+    sendStripeWebhook(invoicePaidEvent($workspace, ['customer' => 'cus_someone_else']))->assertOk();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Free)
+        ->and(Subscription::query()->where('stripe_id', 'sub_managed_1')->sole()->type)->toBe(SubscriptionType::ManagedPending->value)
+        ->and($recorder->requests)->toBe([]);
+
+    Log::shouldHaveReceived('warning')
+        ->once()
+        ->withArgs(fn (string $message, array $context): bool => str_contains($message, 'customer mismatch')
+            && $context['customer'] === 'cus_someone_else'
+            && $context['invoice_id'] === 'in_managed_1');
+});
+
+it('grants nothing when the Stripe subscription names another workspace', function (): void {
+    $workspace = stripeBillingWorkspace();
+    pendingManagedSubscription($workspace);
+    $recorder = stripeManagedSwitch($workspace);
+    $recorder->respondTo('/v1/subscriptions/sub_managed_1', stripeManagedSubscriptionBody($workspace, overrides: [
+        'metadata' => ['workspace_id' => 'someone-elses-workspace', 'type' => 'managed_pending'],
+    ]));
+
+    Log::spy();
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    expect($workspace->refresh()->plan)->toBe(Plan::Free)
+        ->and(Subscription::query()->where('stripe_id', 'sub_managed_1')->sole()->type)->toBe(SubscriptionType::ManagedPending->value)
+        ->and($recorder->countFor('/v1/refunds'))->toBe(0);
+
+    Log::shouldHaveReceived('warning')
+        ->once()
+        ->withArgs(fn (string $message): bool => str_contains($message, 'workspace mismatch'));
+});
+
+it('fails the paid webhook without granting when the refund call fails', function (): void {
+    $this->travelTo(now()->startOfSecond());
+
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Pro])->save();
+    proSubscriptionOn($workspace);
+    pendingManagedSubscription($workspace);
+    $recorder = stripeManagedSwitch($workspace)
+        ->respondTo('/v1/refunds', ['error' => ['type' => 'invalid_request_error', 'message' => 'refund failed']], 400);
+
+    $this->withoutExceptionHandling();
+
+    expect(fn () => sendStripeWebhook(invoicePaidEvent($workspace)))->toThrow(ApiErrorException::class);
+
+    expect(Subscription::query()->where('stripe_id', 'sub_managed_1')->sole()->type)->toBe(SubscriptionType::ManagedPending->value)
+        ->and(Subscription::query()->where('stripe_id', 'sub_pro_1')->sole()->ended())->toBeFalse()
+        ->and($recorder->countFor('/v1/subscriptions/sub_pro_1'))->toBe(0)
+        ->and($workspace->refresh()->plan)->toBe(Plan::Pro);
+});
+
+it('remembers the renewal date and amount for the billing page', function (): void {
+    $workspace = stripeBillingWorkspace();
+    pendingManagedSubscription($workspace);
+    stripeManagedSwitch($workspace);
+
+    sendStripeWebhook(invoicePaidEvent($workspace))->assertOk();
+
+    $renewsAt = stripeManagedSubscriptionBody($workspace)['items']['data'][0]['current_period_end'];
+
+    expect(Cache::get(RememberManagedRenewal::CACHE_PREFIX.'sub_managed_1'))
+        ->toBe(['renews_at' => $renewsAt, 'amount' => 70800, 'currency' => 'usd']);
 });
 
 it('subscribes the Stripe endpoint to paid invoices', function (): void {

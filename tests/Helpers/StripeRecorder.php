@@ -17,10 +17,10 @@ use Stripe\HttpClient\ClientInterface;
  */
 final class StripeRecorder implements ClientInterface
 {
-    /** @var list<array{url: string, params: array<string, mixed>}> */
+    /** @var list<array{url: string, params: array<string, mixed>, headers: array<string, mixed>}> */
     public array $requests = [];
 
-    /** @var array<string, array<string, mixed>> */
+    /** @var array<string, array{body: array<string, mixed>, status: int}> */
     private array $responses = [];
 
     public static function install(): self
@@ -33,9 +33,9 @@ final class StripeRecorder implements ClientInterface
     }
 
     /** @param  array<string, mixed>  $body */
-    public function respondTo(string $urlFragment, array $body): self
+    public function respondTo(string $urlFragment, array $body, int $status = 200): self
     {
-        $this->responses[$urlFragment] = $body;
+        $this->responses[$urlFragment] = ['body' => $body, 'status' => $status];
 
         return $this;
     }
@@ -52,11 +52,11 @@ final class StripeRecorder implements ClientInterface
      */
     public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null): array
     {
-        $this->requests[] = ['url' => (string) $absUrl, 'params' => $params];
+        $this->requests[] = ['url' => (string) $absUrl, 'params' => $params, 'headers' => $headers];
 
         foreach ($this->responses as $urlFragment => $response) {
             if (str_contains((string) $absUrl, $urlFragment)) {
-                return [json_encode($response), 200, []];
+                return [json_encode($response['body']), $response['status'], []];
             }
         }
 
@@ -80,6 +80,38 @@ final class StripeRecorder implements ClientInterface
         };
 
         return [json_encode($body), 200, []];
+    }
+
+    /** @return list<string> */
+    public function headersFor(string $urlFragment): array
+    {
+        foreach ($this->requests as $request) {
+            if (str_contains($request['url'], $urlFragment)) {
+                return array_values($request['headers']);
+            }
+        }
+
+        throw new RuntimeException("No Stripe request matched url fragment [{$urlFragment}].");
+    }
+
+    public function countFor(string $urlFragment): int
+    {
+        return count(array_filter(
+            $this->requests,
+            fn (array $request): bool => str_contains($request['url'], $urlFragment),
+        ));
+    }
+
+    /** @return array<string, mixed> */
+    public function lastParamsFor(string $urlFragment): array
+    {
+        foreach (array_reverse($this->requests) as $request) {
+            if (str_contains($request['url'], $urlFragment)) {
+                return $request['params'];
+            }
+        }
+
+        throw new RuntimeException("No Stripe request matched url fragment [{$urlFragment}].");
     }
 
     /** @return array<string, mixed> */
