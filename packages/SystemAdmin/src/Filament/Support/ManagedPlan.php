@@ -73,7 +73,7 @@ final class ManagedPlan
     {
         return collect(Plan::cases())
             ->filter(fn (Plan $plan): bool => $plan->isManaged())
-            ->mapWithKeys(fn (Plan $plan): array => [$plan->value => $plan->getLabel()])
+            ->mapWithKeys(fn (Plan $plan): array => [$plan->value => $plan->marketingLabel()])
             ->all();
     }
 }

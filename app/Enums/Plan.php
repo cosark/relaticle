@@ -120,6 +120,15 @@ enum Plan: string implements HasColor, HasLabel
         };
     }
 
+    public function marketingLabel(): string
+    {
+        return match ($this) {
+            self::Free, self::Pro => __('billing.plans.cloud_pro'),
+            self::Concierge => __('billing.plans.cloud_concierge'),
+            self::Enterprise => __('billing.plans.enterprise'),
+        };
+    }
+
     public function credits(): int
     {
         return match ($this) {

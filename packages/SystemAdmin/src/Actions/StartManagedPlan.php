@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Relaticle\SystemAdmin\Actions;
 
 use App\Enums\Plan;
+use App\Enums\StripeSubscriptionStatus;
 use App\Enums\SubscriptionType;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Gate;
@@ -21,7 +22,7 @@ final readonly class StartManagedPlan
     {
         abort_unless(Gate::forUser($admin)->allows('manageManagedPlan', $workspace), 403);
 
-        $this->assertStartable($workspace, $plan);
+        $this->assertStartable($workspace, $plan, $yearlyAmount);
 
         $subscription = $this->createInvoicedSubscription($workspace, $plan, $yearlyAmount);
 
@@ -34,20 +35,24 @@ final readonly class StartManagedPlan
         return $subscription;
     }
 
-    private function assertStartable(Workspace $workspace, Plan $plan): void
+    private function assertStartable(Workspace $workspace, Plan $plan, int $yearlyAmount): void
     {
+        if ($yearlyAmount < 1) {
+            throw ValidationException::withMessages(['amount' => 'The yearly amount must be at least $1.']);
+        }
+
         if (! $plan->isManaged()) {
-            $this->refuse("{$plan->getLabel()} is not a managed plan.");
+            $this->refuse("{$plan->marketingLabel()} is not a managed plan.");
         }
 
         if ($plan->stripeProduct() === null) {
-            $this->refuse("No Stripe product is configured for {$plan->getLabel()}.");
+            $this->refuse("No Stripe product is configured for {$plan->marketingLabel()}.");
         }
 
         $hasUnpaidInvoice = $workspace->subscriptions()
             ->where('type', SubscriptionType::ManagedPending->value)
-            ->get()
-            ->contains(fn (Subscription $subscription): bool => $subscription->valid());
+            ->whereNotIn('stripe_status', [StripeSubscriptionStatus::Canceled->value, StripeSubscriptionStatus::IncompleteExpired->value])
+            ->exists();
 
         if ($hasUnpaidInvoice) {
             $this->refuse('Another managed invoice is still unpaid. Withdraw it first.');
@@ -60,9 +65,10 @@ final readonly class StartManagedPlan
 
     private function createInvoicedSubscription(Workspace $workspace, Plan $plan, int $yearlyAmount): Subscription
     {
-        $workspace->createOrGetStripeCustomer();
+        $this->ensureCustomerHasEmail($workspace);
 
         return $workspace->newSubscription(SubscriptionType::ManagedPending->value)
+            ->ignoreIncompletePayments()
             ->price([
                 'price_data' => [
                     'currency' => 'usd',
@@ -80,6 +86,17 @@ final readonly class StartManagedPlan
                     'type' => SubscriptionType::ManagedPending->value,
                 ],
             ]);
+    }
+
+    private function ensureCustomerHasEmail(Workspace $workspace): void
+    {
+        $email = $workspace->owner->email;
+
+        $customer = $workspace->createOrGetStripeCustomer(['email' => $email, 'name' => $workspace->name]);
+
+        if (blank($customer->email)) {
+            $workspace->updateStripeCustomer(['email' => $email]);
+        }
     }
 
     private function latestInvoiceId(Subscription $subscription): string

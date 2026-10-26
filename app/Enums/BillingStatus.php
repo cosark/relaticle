@@ -247,6 +247,7 @@ enum BillingStatus: string implements HasColor, HasDescription, HasLabel
     {
         return $workspace->subscriptions->contains(
             fn (Model $subscription): bool => $subscription instanceof Subscription
+                && $subscription->type !== SubscriptionType::ManagedPending->value
                 && ! in_array($subscription->stripe_status, StripeSubscriptionStatus::neverGranted(), true),
         );
     }
@@ -257,7 +258,9 @@ enum BillingStatus: string implements HasColor, HasDescription, HasLabel
      */
     private static function charged(Builder $query): Builder
     {
-        return $query->whereNotIn('stripe_status', StripeSubscriptionStatus::neverGranted());
+        return $query
+            ->where('type', '!=', SubscriptionType::ManagedPending->value)
+            ->whereNotIn('stripe_status', StripeSubscriptionStatus::neverGranted());
     }
 
     /**

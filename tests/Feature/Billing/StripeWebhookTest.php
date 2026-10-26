@@ -357,7 +357,14 @@ it('keeps the generic trial when a managed subscription is created awaiting its 
     $trialEndsAt = now()->addDays(10)->startOfSecond();
     $workspace->forceFill(['plan' => Plan::Pro, 'trial_ends_at' => $trialEndsAt])->save();
 
-    sendStripeWebhook(stripeSubscriptionEvent($workspace, 'created', ['metadata' => ['type' => 'managed_pending', 'workspace_id' => (string) $workspace->getKey()]]))->assertSuccessful();
+    config()->set('services.stripe.products.concierge', 'prod_concierge_test');
+    $event = stripeSubscriptionEvent($workspace, 'created', [
+        'price' => 'price_managed_inline_test',
+        'metadata' => ['type' => 'managed_pending', 'workspace_id' => (string) $workspace->getKey()],
+    ]);
+    $event['data']['object']['items']['data'][0]['price']['product'] = Plan::Concierge->stripeProduct();
+
+    sendStripeWebhook($event)->assertSuccessful();
 
     $workspace->refresh();
 

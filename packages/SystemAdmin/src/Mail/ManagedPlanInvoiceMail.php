@@ -27,7 +27,7 @@ final class ManagedPlanInvoiceMail extends Mailable implements ShouldQueue
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: __('mail.managed_plan_invoice.subject', ['plan' => $this->planName()]));
+        return new Envelope(subject: __('mail.managed_plan_invoice.subject', ['plan' => $this->plan->marketingLabel()]));
     }
 
     public function content(): Content
@@ -35,18 +35,9 @@ final class ManagedPlanInvoiceMail extends Mailable implements ShouldQueue
         return new Content(
             markdown: 'system-admin::mail.managed-plan-invoice',
             with: [
-                'planName' => $this->planName(),
+                'planName' => $this->plan->marketingLabel(),
                 'formattedAmount' => Number::currency($this->amount, 'USD', precision: 0),
             ],
         );
-    }
-
-    private function planName(): string
-    {
-        return match ($this->plan) {
-            Plan::Concierge => __('billing.plans.cloud_concierge'),
-            Plan::Enterprise => __('billing.plans.enterprise'),
-            Plan::Free, Plan::Pro => $this->plan->getLabel(),
-        };
     }
 }
