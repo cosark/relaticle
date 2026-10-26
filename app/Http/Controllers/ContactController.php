@@ -33,7 +33,7 @@ final readonly class ContactController
         Mail::to(config('relaticle.contact.email'))->send(new NewContactSubmissionMail($data, $plan));
 
         return to_route('contact', $plan instanceof Plan ? ['plan' => $plan->value] : [])
-            ->with('success', 'Thanks for reaching out! We\'ll get back to you soon.');
+            ->with('success', __('Thanks for reaching out! We\'ll get back to you soon.'));
     }
 
     private function inquiryPlan(Request $request): ?Plan
