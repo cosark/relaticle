@@ -24,6 +24,7 @@
 
         $planLabel = match (true) {
             $onLegacyFree => __('billing.plans.legacy_free'),
+            $workspace->plan === \App\Enums\Plan::Free => __('billing.plans.cloud_pro'),
             default => $workspace->plan->marketingLabel(),
         };
 

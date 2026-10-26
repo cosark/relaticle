@@ -49,6 +49,10 @@ final readonly class StartManagedPlan
             $this->refuse("No Stripe product is configured for {$plan->marketingLabel()}.");
         }
 
+        if (blank($workspace->owner?->email)) {
+            $this->refuse('The workspace has no owner to send the invoice to.');
+        }
+
         $hasUnpaidInvoice = $workspace->subscriptions()
             ->where('type', SubscriptionType::ManagedPending->value)
             ->whereNotIn('stripe_status', [StripeSubscriptionStatus::Canceled->value, StripeSubscriptionStatus::IncompleteExpired->value])
@@ -90,7 +94,7 @@ final readonly class StartManagedPlan
 
     private function ensureCustomerHasEmail(Workspace $workspace): void
     {
-        $email = $workspace->owner->email;
+        $email = (string) $workspace->owner?->email;
 
         $customer = $workspace->createOrGetStripeCustomer(['email' => $email, 'name' => $workspace->name]);
 

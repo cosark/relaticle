@@ -249,6 +249,23 @@ it('refuses a plan with no Stripe product configured', function (): void {
     expect(subscriptionRequests($this->stripe))->toBe(0);
 });
 
+it('refuses a workspace whose owner is gone', function (): void {
+    $workspace = managedPlanWorkspace();
+    $workspace->owner()->delete();
+
+    startManagedPlanFor($workspace->refresh(), ['plan' => Plan::Concierge->value, 'amount' => 708])
+        ->assertHasActionErrors(['plan']);
+
+    expect(subscriptionRequests($this->stripe))->toBe(0);
+});
+
+it('names the Free plan as Free when refusing it', function (): void {
+    $administrator = SystemAdministrator::factory()->create();
+
+    expect(fn () => resolve(StartManagedPlan::class)->execute($administrator, managedPlanWorkspace(), Plan::Free, 708))
+        ->toThrow(ValidationException::class, 'Free is not a managed plan.');
+});
+
 it('refuses a plan that is not managed when the action is called directly', function (): void {
     $administrator = SystemAdministrator::factory()->create();
 

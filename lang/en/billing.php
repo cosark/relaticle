@@ -5,6 +5,7 @@ declare(strict_types=1);
 return [
     'title' => 'Billing',
     'plans' => [
+        'free' => 'Free',
         'pro' => 'Pro',
         'cloud_pro' => 'Cloud Pro',
         'cloud_concierge' => 'Cloud Concierge',
