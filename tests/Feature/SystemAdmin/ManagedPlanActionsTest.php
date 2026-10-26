@@ -234,6 +234,27 @@ it('refuses while another managed invoice is unpaid', function (): void {
     expect(subscriptionRequests($this->stripe))->toBe(1);
 });
 
+it('tells the sysadmin to reload when Stripe fails to start the plan', function (string $failingRequest): void {
+    $workspace = managedPlanWorkspace();
+    $this->stripe->respondTo($failingRequest, ['error' => ['type' => 'api_error', 'message' => 'Stripe is having trouble.']], 500);
+
+    Exceptions::fake();
+
+    startManagedPlanFor($workspace, ['plan' => Plan::Concierge->value, 'amount' => 708])
+        ->assertNotified(
+            Notification::make()
+                ->danger()
+                ->title('Invoice not sent')
+                ->body('Stripe did not complete the request. Reload the page before trying again: the subscription may already exist.'),
+        );
+
+    Exceptions::assertReported(fn (RuntimeException $exception): bool => str_contains($exception->getMessage(), (string) $workspace->getKey())
+        && $exception->getPrevious() instanceof ApiErrorException);
+})->with([
+    'creating the subscription' => ['/v1/subscriptions'],
+    'sending the invoice' => ['/v1/invoices/in_managed_test/send'],
+]);
+
 it('refuses a customer with a Stripe balance', function (): void {
     $workspace = managedPlanWorkspace();
     $workspace->forceFill(['stripe_id' => 'cus_'.Str::ulid()])->save();

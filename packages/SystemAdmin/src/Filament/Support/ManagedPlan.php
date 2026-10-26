@@ -66,6 +66,20 @@ final class ManagedPlan
                     );
                 } catch (ValidationException $exception) {
                     throw ValidationException::withMessages(Arr::prependKeysWith($exception->errors(), 'mountedActions.0.data.'));
+                } catch (ApiErrorException $exception) {
+                    report(new RuntimeException(
+                        "Starting a managed plan failed for workspace {$record->getKey()}: {$exception->getMessage()}",
+                        0,
+                        $exception,
+                    ));
+
+                    Notification::make()
+                        ->danger()
+                        ->title('Invoice not sent')
+                        ->body('Stripe did not complete the request. Reload the page before trying again: the subscription may already exist.')
+                        ->send();
+
+                    return;
                 }
 
                 Notification::make()->title('Invoice sent')->success()->send();
