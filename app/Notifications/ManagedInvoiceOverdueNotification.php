@@ -56,7 +56,7 @@ final class ManagedInvoiceOverdueNotification extends InboxNotification
 
     public static function present(NotificationRow $row): FilamentNotification
     {
-        $workspace = Workspace::query()->find(data_get($row->data, 'workspace_id'));
+        $workspace = $row->subject;
         $plan = Plan::tryFrom((string) data_get($row->data, 'plan'))?->marketingLabel() ?? '';
 
         return FilamentNotification::make((string) $row->getKey())
@@ -64,7 +64,7 @@ final class ManagedInvoiceOverdueNotification extends InboxNotification
             ->body(__('billing.managed.overdue_notification_body', [
                 'workspace' => $workspace->name ?? '',
                 'plan' => $plan,
-                'days' => config()->integer('services.stripe.managed_days_until_due'),
+                'button' => __('billing.manage.button'),
             ]))
             ->icon(Heroicon::OutlinedExclamationTriangle)
             ->iconColor('danger')

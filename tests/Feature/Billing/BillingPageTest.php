@@ -15,6 +15,7 @@ use Filament\Facades\Filament;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Cashier\Subscription;
 use Laravel\Pennant\Feature;
 use Relaticle\Chat\Models\AiCreditBalance;
 use Relaticle\EmailIntegration\Models\ConnectedAccount;
@@ -673,16 +674,28 @@ afterEach(function (): void {
     StripeRecorder::uninstall();
 });
 
-function managedPageWorkspace(Workspace $workspace, string $status = 'active'): void
+function managedPageWorkspace(Workspace $workspace, string $status = 'active', Plan $plan = Plan::Concierge, ?Plan $held = null): Subscription
 {
-    $workspace->forceFill(['plan' => Plan::Concierge, 'stripe_id' => 'cus_managed_page'])->save();
-    $workspace->subscriptions()->create([
+    config()->set('services.stripe.products.concierge', 'prod_concierge_test');
+    config()->set('services.stripe.products.enterprise', 'prod_enterprise_test');
+
+    $workspace->forceFill(['plan' => $held ?? $plan, 'stripe_id' => 'cus_managed_page'])->save();
+
+    $subscription = $workspace->subscriptions()->create([
         'type' => 'managed',
         'stripe_id' => 'sub_managed_page',
         'stripe_status' => $status,
         'stripe_price' => 'price_inline_managed_page',
         'quantity' => 1,
     ]);
+    $subscription->items()->create([
+        'stripe_id' => 'si_managed_page',
+        'stripe_product' => $plan->stripeProduct(),
+        'stripe_price' => 'price_inline_managed_page',
+        'quantity' => 1,
+    ]);
+
+    return $subscription;
 }
 
 function cacheManagedRenewalForPage(): void
@@ -715,14 +728,43 @@ it('omits the renewal line when nothing is cached', function (): void {
 });
 
 it('warns the owner when the managed invoice is overdue', function (): void {
-    config()->set('services.stripe.managed_days_until_due', 21);
     [, $workspace] = billingPageOwner();
     managedPageWorkspace($workspace, 'past_due');
 
     livewire(Billing::class)
         ->assertSee(__('billing.managed.overdue_title', ['plan' => 'Cloud Concierge']))
-        ->assertSee(__('billing.managed.overdue_body', ['days' => 21]))
-        ->assertSee('21 days');
+        ->assertSee(__('billing.managed.overdue_body', ['button' => __('billing.manage.button')]))
+        ->assertSee('Pay it from '.__('billing.manage.button').' to keep the plan.');
+});
+
+it('hides the renewal line while the managed invoice is overdue', function (): void {
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace, 'past_due');
+    cacheManagedRenewalForPage();
+
+    livewire(Billing::class)
+        ->assertSee(__('billing.managed.overdue_title', ['plan' => 'Cloud Concierge']))
+        ->assertDontSee('Renews');
+});
+
+it('hides the renewal line once the managed plan is set to cancel', function (): void {
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace)->forceFill(['ends_at' => now()->addDays(10)])->save();
+    cacheManagedRenewalForPage();
+
+    livewire(Billing::class)->assertDontSee('Renews');
+});
+
+it('ignores a managed subscription that sells a plan the workspace does not hold', function (): void {
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace, 'past_due', Plan::Concierge, held: Plan::Enterprise);
+    cacheManagedRenewalForPage();
+
+    livewire(Billing::class)
+        ->assertDontSee(__('billing.managed.overdue_title', ['plan' => 'Enterprise']))
+        ->assertDontSee(__('billing.managed.overdue_title', ['plan' => 'Cloud Concierge']))
+        ->assertDontSee('Renews')
+        ->assertDontSee(__('billing.manage.button'));
 });
 
 it('shows no overdue warning while the managed invoice is current', function (): void {

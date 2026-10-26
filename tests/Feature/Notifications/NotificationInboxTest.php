@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Notifications\ArchiveNotification;
 use App\Actions\Task\NotifyTaskAssignees;
 use App\Enums\Notifications\NotificationReason;
+use App\Enums\Plan;
 use App\Features\EmailIntegration;
 use App\Features\OnboardSeed;
 use App\Filament\Pages\NotificationPreferences;
@@ -13,6 +14,7 @@ use App\Models\Notification;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Notifications\ManagedInvoiceOverdueNotification;
 use App\Support\CurrentWorkspace;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
@@ -612,4 +614,29 @@ it('renders shared email rows without per-row queries beyond the synced copy che
 
     expect($withFifty->reject($isSyncedCopyCheck))->toHaveCount($withFive->reject($isSyncedCopyCheck)->count())
         ->and($withFifty->filter($isSyncedCopyCheck))->toHaveCount(100);
+});
+
+it('renders managed invoice rows without per-row queries', function (): void {
+    $overdueWorkspaces = function (int $count): void {
+        Workspace::factory()->count($count)->create(['user_id' => $this->user->getKey(), 'personal_workspace' => false])
+            ->each(fn (Workspace $workspace) => $this->user->notify(new ManagedInvoiceOverdueNotification($workspace, Plan::Concierge)));
+    };
+    $queriesPerRender = function (): int {
+        $component = Livewire::actingAs($this->user)->test(AppDatabaseNotifications::class);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $component->call('$refresh');
+
+        return count(DB::getQueryLog());
+    };
+
+    $overdueWorkspaces(2);
+    $withTwo = $queriesPerRender();
+
+    $overdueWorkspaces(6);
+    $withEight = $queriesPerRender();
+
+    expect($withEight)->toBe($withTwo);
 });

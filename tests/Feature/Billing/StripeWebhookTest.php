@@ -1517,7 +1517,6 @@ function managedBecamePastDueEvent(Workspace $workspace, Plan $plan = Plan::Conc
 }
 
 it('tells the owner once when a managed invoice becomes overdue', function (): void {
-    config()->set('services.stripe.managed_days_until_due', 30);
     $workspace = stripeBillingWorkspace();
     $workspace->forceFill(['plan' => Plan::Concierge])->save();
     managedSubscriptionOn($workspace);
@@ -1534,7 +1533,8 @@ it('tells the owner once when a managed invoice becomes overdue', function (): v
         ->and($row->group_key)->toBe("managed-overdue:{$workspace->getKey()}")
         ->and($row->data)->toMatchArray(['workspace_id' => $workspace->getKey(), 'plan' => 'concierge'])
         ->and($notification->getTitle())->toBe(__('billing.managed.overdue_title', ['plan' => 'Cloud Concierge']))
-        ->and($notification->getBody())->toContain('30 days')
+        ->and($notification->getBody())->toContain('Pay it from '.__('billing.manage.button').'.')
+        ->and($notification->getBody())->toContain($workspace->name)
         ->and($notification->getActions()[0]->getUrl())->toBe(Billing::getUrl(panel: 'app', tenant: $workspace));
 });
 

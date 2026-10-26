@@ -23,6 +23,7 @@ use Filament\Pages\Page;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Laravel\Cashier\Subscription;
 use Laravel\Pennant\Feature;
 use Livewire\Attributes\Url;
 use Override;
@@ -171,7 +172,7 @@ final class Billing extends Page
         $subscription = $workspace->subscription();
         $hasHostedAccess = resolve(HostedWorkspaceAccess::class)->allows($workspace);
         $isGrandfathered = $workspace->hosted_free_grandfathered_at !== null;
-        $managedSubscription = $workspace->plan->isManaged() ? $workspace->subscription(SubscriptionType::Managed->value) : null;
+        $managedSubscription = $this->managedSubscription($workspace);
 
         return [
             'workspace' => $workspace,
@@ -182,7 +183,7 @@ final class Billing extends Page
             'subscription' => $subscription,
             'managedSubscription' => $managedSubscription,
             'managedPastDue' => $managedSubscription?->pastDue() ?? false,
-            'renewal' => $managedSubscription?->valid() ? Cache::get(RememberManagedRenewal::CACHE_PREFIX.$managedSubscription->stripe_id) : null,
+            'renewal' => $this->renewal($managedSubscription),
             'pastDue' => $workspace->billingStatus() === BillingStatus::PastDue,
             'onGrace' => $subscription?->onGracePeriod() ?? false,
             'trialAvailable' => $this->trialAvailable(),
@@ -194,6 +195,38 @@ final class Billing extends Page
             'availablePacks' => resolve(CreditPackCatalog::class)->purchasable(),
             ...($hasHostedAccess ? [] : $this->pausedViewData($workspace)),
         ];
+    }
+
+    private function managedSubscription(Workspace $workspace): ?Subscription
+    {
+        if (! $workspace->plan->isManaged()) {
+            return null;
+        }
+
+        return Subscription::query()
+            ->where($workspace->getForeignKey(), $workspace->getKey())
+            ->where('type', SubscriptionType::Managed->value)
+            ->latest()
+            ->get()
+            ->first(fn (Subscription $row): bool => $row->valid()
+                && Plan::fromStripeProduct($this->stripeProductOf($row)) === $workspace->plan);
+    }
+
+    private function stripeProductOf(Subscription $subscription): ?string
+    {
+        $product = $subscription->items()->value('stripe_product');
+
+        return is_string($product) ? $product : null;
+    }
+
+    /** @return array{renews_at: int, amount: int, currency: string}|null */
+    private function renewal(?Subscription $managedSubscription): ?array
+    {
+        if (! $managedSubscription instanceof Subscription || ! $managedSubscription->active() || $managedSubscription->pastDue() || $managedSubscription->onGracePeriod()) {
+            return null;
+        }
+
+        return Cache::get(RememberManagedRenewal::CACHE_PREFIX.$managedSubscription->stripe_id);
     }
 
     /** @return array{billingStatus: BillingStatus, mailboxSyncPaused: bool, otherWorkspaces: Collection<int, Workspace>} */

@@ -248,7 +248,7 @@ Behaviour:
 - **The managed card** gets three changes:
   - It shows "Renews :date · $:amount" when `renewal` is set.
   - It shows a "Manage billing" button (portal) when `managedSubscription` exists.
-  - A danger banner appears when `managedPastDue`: title "Your :plan invoice is overdue", body "Pay it from Manage billing to keep the plan. Stripe cancels the plan 30 days after the due date." The 30 comes from config.
+  - A danger banner appears when `managedPastDue`: title "Your :plan invoice is overdue", body "Pay it from :button to keep the plan. If it stays unpaid, Stripe cancels the plan." The button label is `billing.manage.button`. Stripe's cancel delay is a Dashboard setting, so the copy names no number.
 - **`handleCustomerSubscriptionUpdated`** acts after the parent handler. On a transition (`data.previous_attributes.status` present and not `past_due`, fresh status `past_due`) for a local `managed` row whose plan equals `workspace->plan`, it notifies the owner once. It also calls `RememberManagedRenewal` for `managed` rows.
 - **The help article's Concierge section** adds one sentence: "Stripe sends the invoice each year. If a renewal stays unpaid, the workspace returns to Free." The em-dash rule applies, and there is no bare `: ` in front matter.
 

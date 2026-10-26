@@ -177,7 +177,7 @@
                     <x-ri-error-warning-fill class="mt-0.5 h-5 w-5 shrink-0 text-danger-500 dark:text-danger-400" />
                     <div class="flex-1">
                         <h3 class="text-sm font-semibold text-danger-800 dark:text-danger-300">{{ __('billing.managed.overdue_title', ['plan' => $workspace->plan->marketingLabel()]) }}</h3>
-                        <p class="mt-0.5 text-sm text-danger-700/80 dark:text-danger-400/70">{{ __('billing.managed.overdue_body', ['days' => config()->integer('services.stripe.managed_days_until_due')]) }}</p>
+                        <p class="mt-0.5 text-sm text-danger-700/80 dark:text-danger-400/70">{{ __('billing.managed.overdue_body', ['button' => __('billing.manage.button')]) }}</p>
                     </div>
                 </div>
             </div>

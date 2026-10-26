@@ -94,12 +94,7 @@ final class StripeWebhookController extends CashierWebhookController
         return $response;
     }
 
-    /**
-     * Only a paid managed row has a renewal worth showing, and only a transition into
-     * past_due is news: Stripe repeats the status on every later update.
-     *
-     * @param  array<string, mixed>  $payload
-     */
+    /** @param  array<string, mixed>  $payload */
     private function followManagedSubscription(array $payload): void
     {
         /** @var array<string, mixed> $object */
