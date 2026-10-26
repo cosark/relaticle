@@ -40,7 +40,7 @@ final readonly class CancelWorkspaceSubscription
     private function cancelManagedSubscriptions(Workspace $workspace): void
     {
         $managed = $workspace->subscriptions->filter(fn (mixed $subscription): bool => $subscription instanceof Subscription
-            && in_array($subscription->type, [SubscriptionType::Managed->value, SubscriptionType::ManagedPending->value], true)
+            && in_array($subscription->type, SubscriptionType::managed(), true)
             && $subscription->stripe_status !== StripeSubscriptionStatus::Canceled->value
             && ! $subscription->ended());
 

@@ -21,8 +21,6 @@ use UnexpectedValueException;
 
 final readonly class ActivateManagedPlan
 {
-    private const array LIVE_STRIPE_STATUSES = ['active', 'past_due', 'trialing'];
-
     public function __construct(
         private CreditService $credits,
         private CancelWithUnusedTimeRefund $cancelWithRefund,
@@ -35,7 +33,7 @@ final readonly class ActivateManagedPlan
         $stripeSubscription = Cashier::stripe()->subscriptions->retrieve($stripeSubscriptionId);
 
         if ($subscription->type === SubscriptionType::Managed->value) {
-            if ($subscription->valid() && in_array($stripeSubscription->status, self::LIVE_STRIPE_STATUSES, true)) {
+            if ($subscription->valid() && in_array($stripeSubscription->status, StripeSubscriptionStatus::live(), true)) {
                 $this->finishSwitch($workspace, $stripeSubscription, $invoiceId);
             }
 
@@ -77,7 +75,7 @@ final readonly class ActivateManagedPlan
             return null;
         }
 
-        if (! in_array($stripeSubscription->status, self::LIVE_STRIPE_STATUSES, true)) {
+        if (! in_array($stripeSubscription->status, StripeSubscriptionStatus::live(), true)) {
             $this->refuse("subscription is {$stripeSubscription->status}", $workspace, $stripeSubscription->id, $invoiceId);
 
             return null;

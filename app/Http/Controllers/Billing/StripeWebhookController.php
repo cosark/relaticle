@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierWebhookController;
 use Laravel\Cashier\Subscription;
+use Stripe\Invoice;
 use Symfony\Component\HttpFoundation\Response;
 use UnexpectedValueException;
 
@@ -191,13 +192,13 @@ final class StripeWebhookController extends CashierWebhookController
         $invoice = $payload['data']['object'] ?? [];
         $stripeSubscriptionId = $invoice['parent']['subscription_details']['subscription'] ?? null;
 
-        if (($invoice['billing_reason'] ?? null) !== 'subscription_create' || ! is_string($stripeSubscriptionId)) {
+        if (($invoice['billing_reason'] ?? null) !== Invoice::BILLING_REASON_SUBSCRIPTION_CREATE || ! is_string($stripeSubscriptionId)) {
             return $this->successMethod();
         }
 
         $subscription = Subscription::query()
             ->where('stripe_id', $stripeSubscriptionId)
-            ->whereIn('type', [SubscriptionType::ManagedPending->value, SubscriptionType::Managed->value])
+            ->whereIn('type', SubscriptionType::managed())
             ->first();
         $workspace = $subscription?->owner()->first();
 

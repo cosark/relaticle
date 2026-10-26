@@ -132,7 +132,7 @@ final readonly class TransferWorkspaceBilling
 
     private function holdsManagedSubscription(Workspace $source): bool
     {
-        return $source->subscriptions->contains(fn (Subscription $subscription): bool => in_array($subscription->type, [SubscriptionType::Managed->value, SubscriptionType::ManagedPending->value], true)
-            && ! in_array($subscription->stripe_status, [StripeSubscriptionStatus::Canceled->value, StripeSubscriptionStatus::IncompleteExpired->value], true));
+        return $source->subscriptions->contains(fn (Subscription $subscription): bool => in_array($subscription->type, SubscriptionType::managed(), true)
+            && ! in_array($subscription->stripe_status, StripeSubscriptionStatus::ended(), true));
     }
 }

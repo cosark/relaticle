@@ -438,7 +438,7 @@ final class Workspace extends Model implements HasAvatar, HasMedia, Onboardable
         return $this->subscriptions
             ->filter(fn (mixed $subscription): bool => $subscription instanceof Subscription
                 && $subscription->type === SubscriptionType::ManagedPending->value
-                && ! in_array($subscription->stripe_status, [StripeSubscriptionStatus::Canceled->value, StripeSubscriptionStatus::IncompleteExpired->value], true))
+                && ! in_array($subscription->stripe_status, StripeSubscriptionStatus::ended(), true))
             ->sortByDesc('created_at')
             ->first();
     }

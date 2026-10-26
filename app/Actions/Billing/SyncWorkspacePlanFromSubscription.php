@@ -64,7 +64,7 @@ final readonly class SyncWorkspacePlanFromSubscription
 
     private function subscriptionPlan(Subscription $subscription): ?Plan
     {
-        if (! in_array($subscription->type, [SubscriptionType::Managed->value, SubscriptionType::ManagedPending->value], true)) {
+        if (! in_array($subscription->type, SubscriptionType::managed(), true)) {
             return Plan::fromStripePrice($subscription->stripe_price);
         }
 

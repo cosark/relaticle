@@ -10,10 +10,11 @@ use Illuminate\Validation\ValidationException;
 use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Subscription;
 use Relaticle\SystemAdmin\Models\SystemAdministrator;
+use Stripe\Invoice;
 
 final readonly class WithdrawManagedInvoice
 {
-    private const array VOIDABLE_STATUSES = ['draft', 'open', 'uncollectible'];
+    private const array VOIDABLE_STATUSES = [Invoice::STATUS_DRAFT, Invoice::STATUS_OPEN, Invoice::STATUS_UNCOLLECTIBLE];
 
     public function execute(SystemAdministrator $admin, Workspace $workspace): void
     {
@@ -27,11 +28,11 @@ final readonly class WithdrawManagedInvoice
 
         $invoice = $subscription->asStripeSubscription(['latest_invoice'])->latest_invoice;
 
-        if ($invoice?->status === 'paid') {
+        if ($invoice?->status === Invoice::STATUS_PAID) {
             $this->refuse('The invoice is already paid. The plan switches on when Stripe confirms the payment.');
         }
 
-        if ($invoice?->status === 'draft') {
+        if ($invoice?->status === Invoice::STATUS_DRAFT) {
             Cashier::stripe()->invoices->finalizeInvoice($invoice->id, ['auto_advance' => false]);
         }
 
