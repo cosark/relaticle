@@ -7,10 +7,13 @@ namespace App\Http\Controllers\Billing;
 use App\Actions\Billing\ActivateManagedPlan;
 use App\Actions\Billing\GrantPurchasedCredits;
 use App\Actions\Billing\NotifyWorkspaceOfPaymentFailure;
+use App\Actions\Billing\RememberManagedRenewal;
 use App\Actions\Billing\RestoreWorkspaceTrial;
 use App\Enums\StripeSubscriptionStatus;
 use App\Enums\SubscriptionType;
+use App\Models\User;
 use App\Models\Workspace;
+use App\Notifications\ManagedInvoiceOverdueNotification;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierWebhookController;
@@ -35,6 +38,7 @@ final class StripeWebhookController extends CashierWebhookController
         private readonly GrantPurchasedCredits $grantCredits,
         private readonly NotifyWorkspaceOfPaymentFailure $notifyPaymentFailure,
         private readonly ActivateManagedPlan $activateManagedPlan,
+        private readonly RememberManagedRenewal $rememberManagedRenewal,
     ) {
         parent::__construct();
     }
@@ -83,7 +87,59 @@ final class StripeWebhookController extends CashierWebhookController
             $payload['data']['object'] = Cashier::stripe()->subscriptions->retrieve($stripeId)->toArray();
         }
 
-        return parent::handleCustomerSubscriptionUpdated($payload);
+        $response = parent::handleCustomerSubscriptionUpdated($payload);
+
+        $this->followManagedSubscription($payload);
+
+        return $response;
+    }
+
+    /**
+     * Only a paid managed row has a renewal worth showing, and only a transition into
+     * past_due is news: Stripe repeats the status on every later update.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function followManagedSubscription(array $payload): void
+    {
+        /** @var array<string, mixed> $object */
+        $object = $payload['data']['object'] ?? [];
+        $stripeId = $object['id'] ?? null;
+
+        $subscription = is_string($stripeId)
+            ? Subscription::query()->where('stripe_id', $stripeId)->where('type', SubscriptionType::Managed->value)->first()
+            : null;
+
+        if (! $subscription instanceof Subscription) {
+            return;
+        }
+
+        $this->rememberManagedRenewal->execute($object);
+
+        $previousStatus = $payload['data']['previous_attributes']['status'] ?? null;
+
+        if (is_string($previousStatus) && $previousStatus !== 'past_due' && ($object['status'] ?? null) === 'past_due') {
+            $this->notifyOwnerOfOverdueInvoice($subscription);
+        }
+    }
+
+    private function notifyOwnerOfOverdueInvoice(Subscription $subscription): void
+    {
+        $workspace = $subscription->owner()->first();
+
+        if (! $workspace instanceof Workspace || ! $workspace->plan->isManaged()) {
+            return;
+        }
+
+        if (! $subscription->hasProduct((string) $workspace->plan->stripeProduct())) {
+            return;
+        }
+
+        $owner = $workspace->owner()->first();
+
+        if ($owner instanceof User) {
+            $owner->notify(new ManagedInvoiceOverdueNotification($workspace, $workspace->plan));
+        }
     }
 
     /**

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\Billing\RememberManagedRenewal;
 use App\Actions\Billing\StartProTrial;
 use App\Enums\Plan;
 use App\Features\Billing as BillingFeature;
@@ -12,10 +13,12 @@ use App\Services\Billing\CreditPackCatalog;
 use App\Services\Billing\HostedWorkspaceAccess;
 use Filament\Facades\Filament;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Pennant\Feature;
 use Relaticle\Chat\Models\AiCreditBalance;
 use Relaticle\EmailIntegration\Models\ConnectedAccount;
+use Tests\Helpers\StripeRecorder;
 
 mutates(
     Billing::class,
@@ -664,4 +667,111 @@ it('shows spendable credits separately after the monthly allowance is exhausted'
         ->assertSee('150 credits available')
         ->assertSee('2,050 credits used this period')
         ->assertSee('100%');
+});
+
+afterEach(function (): void {
+    StripeRecorder::uninstall();
+});
+
+function managedPageWorkspace(Workspace $workspace, string $status = 'active'): void
+{
+    $workspace->forceFill(['plan' => Plan::Concierge, 'stripe_id' => 'cus_managed_page'])->save();
+    $workspace->subscriptions()->create([
+        'type' => 'managed',
+        'stripe_id' => 'sub_managed_page',
+        'stripe_status' => $status,
+        'stripe_price' => 'price_inline_managed_page',
+        'quantity' => 1,
+    ]);
+}
+
+function cacheManagedRenewalForPage(): void
+{
+    Cache::forever(RememberManagedRenewal::CACHE_PREFIX.'sub_managed_page', [
+        'renews_at' => now()->addMonths(6)->getTimestamp(),
+        'amount' => 70800,
+        'currency' => 'usd',
+    ]);
+}
+
+it('shows the managed renewal date and amount', function (): void {
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace);
+    cacheManagedRenewalForPage();
+
+    livewire(Billing::class)
+        ->assertSee('Renews '.now()->addMonths(6)->toFormattedDateString())
+        ->assertSee('$708')
+        ->assertSee(__('billing.manage.button'));
+});
+
+it('omits the renewal line when nothing is cached', function (): void {
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace);
+
+    livewire(Billing::class)
+        ->assertDontSee('Renews')
+        ->assertSee(__('billing.manage.button'));
+});
+
+it('warns the owner when the managed invoice is overdue', function (): void {
+    config()->set('services.stripe.managed_days_until_due', 21);
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace, 'past_due');
+
+    livewire(Billing::class)
+        ->assertSee(__('billing.managed.overdue_title', ['plan' => 'Cloud Concierge']))
+        ->assertSee(__('billing.managed.overdue_body', ['days' => 21]))
+        ->assertSee('21 days');
+});
+
+it('shows no overdue warning while the managed invoice is current', function (): void {
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace);
+
+    livewire(Billing::class)
+        ->assertDontSee(__('billing.managed.overdue_title', ['plan' => 'Cloud Concierge']));
+});
+
+it('opens the Stripe portal with the managed configuration', function (): void {
+    config()->set('services.stripe.portal_configurations.managed', 'bpc_managed_test');
+    config()->set('cashier.secret', 'sk_test_fake');
+    $recorder = StripeRecorder::install();
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace);
+
+    livewire(Billing::class)->call('managePortal');
+
+    expect($recorder->paramsFor('/billing_portal/sessions')['configuration'])->toBe('bpc_managed_test')
+        ->and($recorder->paramsFor('/billing_portal/sessions')['customer'])->toBe('cus_managed_page');
+});
+
+it('opens the default Stripe portal when no managed configuration is set', function (): void {
+    config()->set('services.stripe.portal_configurations.managed', null);
+    config()->set('cashier.secret', 'sk_test_fake');
+    $recorder = StripeRecorder::install();
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace);
+
+    livewire(Billing::class)->call('managePortal');
+
+    expect($recorder->paramsFor('/billing_portal/sessions'))->not->toHaveKey('configuration');
+});
+
+it('shows a member the managed plan without billing controls', function (): void {
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace, 'past_due');
+    cacheManagedRenewalForPage();
+    $member = User::factory()->create();
+    $workspace->users()->attach($member, ['role' => 'member']);
+
+    test()->actingAs($member);
+    Filament::setTenant($workspace->refresh());
+
+    livewire(Billing::class)
+        ->assertSee(__('billing.plans.cloud_concierge'))
+        ->assertSee(__('billing.member.ask_owner', ['owner' => $workspace->owner->name]))
+        ->assertDontSee(__('billing.manage.button'))
+        ->assertDontSee('Renews')
+        ->assertDontSee(__('billing.managed.overdue_title', ['plan' => 'Cloud Concierge']));
 });

@@ -165,6 +165,11 @@ return [
         'tagline' => 'Contact us for plan and billing changes.',
         'previous_subscription_canceling' => 'Your previous subscription ends on :date. Your current plan is unchanged.',
         'previous_subscription_past_due' => 'Your previous subscription has a payment issue. Your current plan is unchanged. Contact us to resolve the previous subscription.',
+        'renews' => 'Renews :date · :amount',
+        'overdue_title' => 'Your :plan invoice is overdue',
+        'overdue_body' => 'Pay it from Manage billing to keep the plan. Stripe cancels the plan :days days after the due date.',
+        'overdue_notification_body' => ':workspace has an unpaid :plan invoice. Pay it from Manage billing. Stripe cancels the plan :days days after the due date.',
+        'overdue_notification_action' => 'Open billing',
     ],
     'concierge' => [
         'tagline' => 'We set it up and keep it current.',

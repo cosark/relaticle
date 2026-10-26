@@ -21,6 +21,7 @@ use App\Livewire\App\AppDatabaseNotifications;
 use App\Mail\ProEndedMail;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Notifications\ManagedInvoiceOverdueNotification;
 use App\Notifications\PaymentFailedNotification;
 use App\Services\Billing\HostedWorkspaceAccess;
 use App\Support\CurrentWorkspace;
@@ -49,6 +50,8 @@ mutates(ActivateManagedPlan::class);
 mutates(CancelWithUnusedTimeRefund::class);
 mutates(RememberManagedRenewal::class);
 mutates(PaymentFailedNotification::class);
+mutates(ManagedInvoiceOverdueNotification::class);
+mutates(StripeWebhookController::class);
 
 beforeEach(function (): void {
     config()->set('cashier.webhook.secret', 'whsec_test_secret');
@@ -1502,4 +1505,102 @@ it('ends a Concierge plan even when another workspace holds a valid managed subs
     Mail::assertQueued(ProEndedMail::class, 1);
     Mail::assertQueued(ProEndedMail::class, fn (ProEndedMail $mail): bool => $mail->hasTo($workspace->owner->email)
         && $mail->envelope()->subject === 'Your Cloud Concierge plan has ended');
+});
+
+/** @return array<string, mixed> */
+function managedBecamePastDueEvent(Workspace $workspace, Plan $plan = Plan::Concierge): array
+{
+    $payload = managedSubscriptionEvent($workspace, 'updated', $plan, overrides: ['status' => 'past_due']);
+    $payload['data']['previous_attributes'] = ['status' => 'active'];
+
+    return $payload;
+}
+
+it('tells the owner once when a managed invoice becomes overdue', function (): void {
+    config()->set('services.stripe.managed_days_until_due', 30);
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($workspace);
+
+    sendStripeWebhook(managedBecamePastDueEvent($workspace))->assertSuccessful();
+    sendStripeWebhook(managedBecamePastDueEvent($workspace))->assertSuccessful();
+
+    $row = $workspace->owner->notifications()->sole();
+    $notification = ManagedInvoiceOverdueNotification::present($row);
+
+    expect($row->type)->toBe(ManagedInvoiceOverdueNotification::class)
+        ->and($row->workspace_id)->toBeNull()
+        ->and($row->reason)->toBe(NotificationReason::System)
+        ->and($row->group_key)->toBe("managed-overdue:{$workspace->getKey()}")
+        ->and($row->data)->toMatchArray(['workspace_id' => $workspace->getKey(), 'plan' => 'concierge'])
+        ->and($notification->getTitle())->toBe(__('billing.managed.overdue_title', ['plan' => 'Cloud Concierge']))
+        ->and($notification->getBody())->toContain('30 days')
+        ->and($notification->getActions()[0]->getUrl())->toBe(Billing::getUrl(panel: 'app', tenant: $workspace));
+});
+
+it('stays quiet about an overdue invoice for a plan the workspace does not hold', function (string $type, Plan $held): void {
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => $held])->save();
+    managedSubscriptionOn($workspace, Plan::Concierge, type: $type);
+
+    $payload = managedBecamePastDueEvent($workspace);
+    $payload['data']['object']['metadata']['type'] = $type;
+
+    sendStripeWebhook($payload)->assertSuccessful();
+
+    expect($workspace->owner->notifications()->count())->toBe(0);
+})->with([
+    'a first invoice still unpaid' => ['managed_pending', Plan::Concierge],
+    'a different managed plan' => ['managed', Plan::Enterprise],
+]);
+
+it('stays quiet when a managed subscription was already past due', function (): void {
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($workspace, status: 'past_due');
+
+    $payload = managedBecamePastDueEvent($workspace);
+    $payload['data']['previous_attributes'] = ['status' => 'past_due'];
+
+    sendStripeWebhook($payload)->assertSuccessful();
+
+    expect($workspace->owner->notifications()->count())->toBe(0);
+});
+
+it('stays quiet about an update that does not change the status', function (): void {
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($workspace, status: 'past_due');
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'updated', overrides: ['status' => 'past_due']))->assertSuccessful();
+
+    expect($workspace->owner->notifications()->count())->toBe(0);
+});
+
+it('refreshes the remembered renewal when a managed subscription updates', function (): void {
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($workspace);
+
+    $payload = managedSubscriptionEvent($workspace, 'updated');
+    $payload['data']['object']['items']['data'][0]['current_period_end'] = 1_800_000_000;
+    $payload['data']['object']['items']['data'][0]['price'] += ['unit_amount' => 70800, 'currency' => 'usd'];
+
+    sendStripeWebhook($payload)->assertSuccessful();
+
+    expect(Cache::get(RememberManagedRenewal::CACHE_PREFIX.'sub_managed_1'))
+        ->toBe(['renews_at' => 1_800_000_000, 'amount' => 70800, 'currency' => 'usd']);
+});
+
+it('remembers no renewal for a Pro subscription update', function (): void {
+    $workspace = stripeBillingWorkspace();
+    proSubscriptionOn($workspace, 'sub_test_1');
+
+    $payload = stripeSubscriptionEvent($workspace, 'updated');
+    $payload['data']['object']['items']['data'][0]['current_period_end'] = 1_800_000_000;
+    $payload['data']['object']['items']['data'][0]['price'] += ['unit_amount' => 1900, 'currency' => 'usd'];
+
+    sendStripeWebhook($payload)->assertSuccessful();
+
+    expect(Cache::get(RememberManagedRenewal::CACHE_PREFIX.'sub_test_1'))->toBeNull();
 });

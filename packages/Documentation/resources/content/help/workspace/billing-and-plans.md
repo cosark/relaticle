@@ -26,7 +26,8 @@ pipeline and fields around how you sell, move your existing data in, and walk
 your team through it. After that, we make up to 5 changes a month, each within
 one business day. It includes 5,000 AI credits a month and costs **$708 a year
 per workspace**, invoiced yearly. Ask for it from the [pricing page](/pricing).
-Setup starts once the invoice is paid.
+Setup starts once the invoice is paid. Stripe sends the invoice each year.
+If a renewal stays unpaid, the workspace returns to Free.
 
 ## The trial
 

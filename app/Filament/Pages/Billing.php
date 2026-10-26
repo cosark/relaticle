@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Actions\Billing\CreateCreditPackCheckout;
+use App\Actions\Billing\RememberManagedRenewal;
 use App\Actions\Billing\StartProTrial;
 use App\Enums\BillingStatus;
 use App\Enums\Plan;
+use App\Enums\SubscriptionType;
 use App\Enums\WorkspaceCapability;
 use App\Features\Billing as BillingFeature;
 use App\Filament\Pages\Concerns\HasWorkspaceSettingsNavigation;
@@ -20,6 +22,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Laravel\Pennant\Feature;
 use Livewire\Attributes\Url;
 use Override;
@@ -125,7 +128,12 @@ final class Billing extends Page
         }
 
         try {
-            $this->redirect($workspace->billingPortalUrl(self::getUrl(panel: 'app', tenant: $workspace)));
+            $configuration = $workspace->plan->isManaged() ? config('services.stripe.portal_configurations.managed') : null;
+
+            $this->redirect($workspace->billingPortalUrl(
+                self::getUrl(panel: 'app', tenant: $workspace),
+                $configuration === null ? [] : ['configuration' => $configuration],
+            ));
         } catch (Throwable $exception) {
             report($exception);
             $this->notifyCheckoutFailed();
@@ -163,6 +171,7 @@ final class Billing extends Page
         $subscription = $workspace->subscription();
         $hasHostedAccess = resolve(HostedWorkspaceAccess::class)->allows($workspace);
         $isGrandfathered = $workspace->hosted_free_grandfathered_at !== null;
+        $managedSubscription = $workspace->plan->isManaged() ? $workspace->subscription(SubscriptionType::Managed->value) : null;
 
         return [
             'workspace' => $workspace,
@@ -171,6 +180,9 @@ final class Billing extends Page
             'allowance' => resolve(CreditService::class)->allowanceFor($workspace),
             'canManageBilling' => $this->user()->hasWorkspaceCapability($workspace->getKey(), WorkspaceCapability::BillingManage),
             'subscription' => $subscription,
+            'managedSubscription' => $managedSubscription,
+            'managedPastDue' => $managedSubscription?->pastDue() ?? false,
+            'renewal' => $managedSubscription?->valid() ? Cache::get(RememberManagedRenewal::CACHE_PREFIX.$managedSubscription->stripe_id) : null,
             'pastDue' => $workspace->billingStatus() === BillingStatus::PastDue,
             'onGrace' => $subscription?->onGracePeriod() ?? false,
             'trialAvailable' => $this->trialAvailable(),

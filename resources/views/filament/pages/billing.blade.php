@@ -44,6 +44,11 @@
             default => 'bg-primary',
         };
 
+        $renewalLabel = is_array($renewal) ? __('billing.managed.renews', [
+            'date' => \Illuminate\Support\Facades\Date::createFromTimestamp($renewal['renews_at'])->toFormattedDateString(),
+            'amount' => \Illuminate\Support\Number::currency($renewal['amount'] / 100, strtoupper($renewal['currency']), precision: $renewal['amount'] % 100 === 0 ? 0 : 2),
+        ]) : null;
+
         $card = 'rounded-2xl border border-[var(--surface-card-border)] bg-white shadow-sm dark:bg-[var(--surface-card-bg)] dark:shadow-none';
     @endphp
 
@@ -166,6 +171,18 @@
             </div>
         @endif
 
+        @if($managedPastDue && $canManageBilling)
+            <div class="rounded-2xl border border-danger-200 bg-danger-50 p-5 dark:border-danger-400/20 dark:bg-danger-400/[0.06]">
+                <div class="flex gap-3">
+                    <x-ri-error-warning-fill class="mt-0.5 h-5 w-5 shrink-0 text-danger-500 dark:text-danger-400" />
+                    <div class="flex-1">
+                        <h3 class="text-sm font-semibold text-danger-800 dark:text-danger-300">{{ __('billing.managed.overdue_title', ['plan' => $workspace->plan->marketingLabel()]) }}</h3>
+                        <p class="mt-0.5 text-sm text-danger-700/80 dark:text-danger-400/70">{{ __('billing.managed.overdue_body', ['days' => config()->integer('services.stripe.managed_days_until_due')]) }}</p>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         @if($onGrace)
             <div class="rounded-2xl border border-warning-200 bg-warning-50 p-5 dark:border-warning-400/20 dark:bg-warning-400/[0.06]">
                 <div class="flex gap-3">
@@ -193,9 +210,12 @@
             <div class="{{ $card }} p-6">
                 <h3 class="font-display text-lg font-semibold text-gray-900 dark:text-white">{{ $isEnterprise ? __('billing.enterprise.title') : __('billing.managed.title') }}</h3>
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ __('billing.enterprise.body') }}</p>
+                @if($renewalLabel)
+                    <p class="mt-3 text-sm font-medium text-gray-900 dark:text-white">{{ $renewalLabel }}</p>
+                @endif
                 <div class="mt-5 flex flex-wrap gap-3">
                     <x-filament::button tag="a" color="gray" :href="url()->getPublicUrl(route('contact', absolute: false))">{{ __('billing.enterprise.manage') }}</x-filament::button>
-                    @if($canManageSubscription && ! $pastDue)
+                    @if($managedSubscription || ($canManageSubscription && ! $pastDue))
                         <x-filament::button color="gray" wire:click="managePortal">{{ __('billing.manage.button') }}</x-filament::button>
                     @endif
                 </div>
