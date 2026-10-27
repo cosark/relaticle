@@ -1,0 +1,465 @@
+# Table layouts: resize, remembered state, saved layouts, column menu, pinned columns
+
+Date: 2026-10-27
+Status: design, not implemented
+Issue: #943 (absorbs #740)
+Reference: PR #944 (`2026-10-06-saved-table-views-design.md` on `feat/saved-table-views`). This
+spec keeps its core design and replaces its delivery plan. Where the two disagree, this one wins.
+
+## Problem
+
+Every CRM list table forgets what the user did to it. Column visibility and order live in the
+Laravel session, so they reset when the session expires. Sort, filters, search and page size are
+not remembered at all. Issue #740 carries the repro: hide `Created By` on People, come back after the session
+lifetime, and the column is back.
+
+Column widths are worse. `asmit/resized-column` keeps its database write behind a flag we never
+set, and the `table_settings` table it targets exists in neither the local nor the production
+database. Widths live in the session only.
+
+There is also no way to keep two layouts of the same table ("Hot leads", "Renewals this month")
+and switch between them, and no way to share one with the workspace.
+
+## Goals
+
+- A member's last table state comes back on their next visit, on any device, per workspace.
+- Members save named layouts of a table, switch between them, and may share them with the
+  workspace.
+- Column widths are stored, per member, and the resizer is our own code.
+- Each column header offers sort, move, hide and (last) pin from one menu.
+- Columns can be reordered by dragging their headers.
+- Columns can be pinned to the left edge and stay visible while the table scrolls sideways.
+
+## Non-goals
+
+- Relation managers, the activity log, import history, the Livewire settings tables and the
+  SystemAdmin panel. They keep Filament's default behaviour.
+- A workspace-wide default layout that an Admin forces on every member.
+- Pinning to the right edge.
+- Widths that change with the active layout. Widths stay per member and per table.
+- A separate package. See Decisions.
+- Remembering the list, board or cards choice of the view switcher. It has the same session-only
+  problem and gets its own issue.
+
+## Anti-goals
+
+The feature fails, even if every test passes, when:
+
+- The layouts control says a layout is active while the table shows something else. The
+  "(modified)" state exists to prevent exactly this.
+- A deleted custom field breaks a saved layout or a member's table. State heals itself (see
+  Self-healing).
+- Opening a table writes to the database. Writes happen only when the member changes something.
+- One workspace's custom field columns leak into another's state.
+- A menu item is shown before the phase that makes it work.
+
+## Decisions
+
+| Decision | Chosen | Rejected |
+|---|---|---|
+| Delivery | Five phases, one PR each, stacked branches | One PR with three commits (#944) |
+| Where the code lives | `app/`, in the folders listed under Code layout | A `packages/` module: the feature has no panel, routes or lifecycle of its own, and every part depends on `App` models and enums |
+| Row key | `entity`, a `CrmEntity` value | The list page class name (#944): a class rename would orphan every saved row |
+| Layouts control placement | Table toolbar, left of search | Page header beside Import / Export (#944's default) |
+| Sharing | Private layouts, plus share to the workspace; Admins may edit or delete a shared layout | Private only; shared but owner-only |
+| What a layout stores | Columns (visibility, order), sort, filters, search, column searches, grouping, page size, pins | Widths: they stay per member and per table |
+| Auto-save | Yes: the last state persists per member, and saved layouts sit on top | Saved layouts only |
+| Resize | Port the Maxforms implementation | Keep `asmit/resized-column`; reimplement a minimal resizer |
+| Name | "Layout": Save layout, My layouts, Delete layout. Models `TableLayout` and `TablePreference` | "View": the list, board and cards switcher (`RemembersViewMode`) already owns that word, and `architecture.md` allows one word per concept |
+| Default page size | 25, already set on `main` (`AppPanelProvider::DEFAULT_PAGINATION_PAGE_OPTION`) | 10 |
+
+## Phases
+
+Phases 1 to 3 are what #943 promises. Phases 4 and 5 are in scope and follow them. Each phase
+is one PR on its own branch, branched from the previous phase's branch, and each one is
+shippable on its own.
+
+| Phase | Ships | Needs |
+|---|---|---|
+| 1. Resize port | Maxforms resizer on all five tables; `asmit/resized-column` removed | none |
+| 2. Remembered table state | `table_preferences`; every table setting, widths included, comes back per member and workspace | 1 |
+| 3. Saved layouts | `table_layouts`; layouts control in the toolbar; sharing; "(modified)" state | 2 |
+| 4. Column menu and reorder | Header menu with sort, move and hide; drag headers to reorder | 2 |
+| 5. Pinned columns | "Pin to left" in the menu; sticky columns; pins saved in state and in layouts | 1, 2, 4 |
+
+The five tables are `ListCompanies`, `ListPeople`, `ListOpportunities`, `ManageTasks` and
+`ManageNotes`.
+
+### Phase 1: Resize port
+
+Replace `asmit/resized-column` with the Maxforms implementation at today's behaviour: widths are
+remembered in the session, as they are now. Phase 2 moves them to the database.
+
+![Dragging a column edge shows a guideline and the width](assets/table-layouts/phase-1-resize-drag.png)
+![The ported resizer in dark mode](assets/table-layouts/phase-1-resize-dark.png)
+
+Source: the `maxforms-resizable` extract (Maxforms commit `de1c8eeb9`), kept beside the
+repository. Its README names each file.
+
+- `HasResizableColumns` trait to `app/Filament/Tables/Concerns/`. Drop the `TableSetting` model
+  and its migration: keep the session write only. Keep the server-side clamp of 40 to 1000 px,
+  because the Livewire action accepts any payload.
+- `ResizableColumnsMacro` to `app/Filament/Tables/Macros/`, registered in
+  `AppServiceProvider::boot()`. Keep the fixed and elastic classification: it stops a timestamp
+  column stretching across a wide monitor.
+- The resize half of `submissions.js` (from the "resizableColumn Alpine component" banner to
+  the end, minus the expandable-text wiring) to `resources/js/filament/resizable-columns.js`,
+  registered with `FilamentAsset::register()` like `payload-guard.js`. Commit the published copy
+  under `public/js/app/`.
+- The resize rules of `submissions.css` (those targeting `fi-ta-resizable-*`,
+  `data-resizable-*` and `column-resize-*`) folded into `resources/css/filament/app/theme.css`.
+- Remove the package from `composer.json`, `ResizedColumnPlugin` from `AppPanelProvider`, and
+  `Asmit\ResizedColumn\HasResizableColumn` from the five pages.
+- Re-derive or delete the z-index workaround under "Dropdowns" in `theme.css`. It exists only
+  because asmit lifts the table toolbar to z-index 21.
+
+Learned from the spike on `spike/maxforms-resize`:
+
+- The ported CSS hardcodes Tailwind's blue-gray and indigo. Replace every colour with the
+  panel's variables (`--gray-*`, `--primary-*`). The spike's header row came out navy in dark
+  mode until this was done.
+- The JS rewrites each cell's `style` attribute on every measuring pass, so nothing else may set
+  inline styles on table cells. Phase 5 depends on this.
+- The ported comments carry em-dashes, which `tests/Arch/ConventionsTest.php` fails, and run
+  past the two-line cap. Rewrite them during the port.
+- The macro reads the table's columns, so on pages using `HasCustomFieldColumns` it must run
+  after that trait's `table()`, so that custom field columns are included.
+- The resizer reserves a fixed width for row actions, which assumes they are wrapped in an
+  `ActionGroup`. Confirm this on all five tables.
+
+Done when:
+
+- All five tables resize by drag, and a double-click on a handle fits the column to its content.
+- A width survives a reload within the session.
+- Dropdowns, row menus, the sticky table head and SPA navigation between the five tables work in
+  Chromium and WebKit, light and dark.
+- `asmit/resized-column` is gone from `composer.json` and `composer.lock`.
+
+### Phase 2: Remembered table state
+
+Everything a member does to a table is saved per member, per workspace and per table, and comes
+back on their next visit on any device. No new UI. Only column state is remembered today, and
+only within a session; the rest is new.
+
+- Turn off Filament's session persistence for table state in `AppPanelProvider`, scoped to the
+  app panel (see Filament internals). The database becomes the only store.
+- Add `table_preferences` and `TableStateData` (see Domain model).
+- Add the `PersistsTableState` trait to the five pages:
+  1. `loadTableColumnsFromSession()`: return the stored column state, else the default.
+  2. `mountInteractsWithTable()`: call the parent, then seed sort, filters, search, column
+     searches, grouping and page size from the row. Each is guarded on `blank()`, so a shared
+     URL wins over saved state.
+  3. `dehydrate()`: hash the current state, compare it with the hash taken at boot, and persist
+     through `SaveTablePreference` when it changed. One writer, one write per request.
+- Widths move from the session to the row. The phase 1 width action keeps its clamp and only
+  assigns the property; the dehydrate sync persists it. `#[Renderless]` skips rendering, not
+  dehydration.
+
+Done when:
+
+- A hidden column, a reordered column, a width, a sort, a filter and a page size each survive a
+  logout and login.
+- The same member in a second workspace has separate state for the same table.
+- Opening a table without changing anything writes nothing.
+- A state that names a deleted custom field loads without error (see Self-healing).
+
+### Phase 3: Saved layouts
+
+A member saves the current table as a named layout, switches between layouts, and may share a layout
+with the workspace.
+
+![The layouts menu in the table toolbar](assets/table-layouts/phase-3-layouts-menu.png)
+![The layouts menu in dark mode](assets/table-layouts/phase-3-layouts-menu-dark.png)
+
+The control sits in the table toolbar, left of search, through
+`TablesRenderHook::TOOLBAR_START` scoped to the five pages. The menu lists the member's own
+layouts, then the layouts shared with the workspace (each with its owner's name), then the actions:
+Save, Save as new layout, Rename, Share with workspace, Set as my default, Reset, Delete layout. A
+star marks the member's default layout.
+
+![A changed layout reads "(modified)" and offers Revert and Save](assets/table-layouts/phase-3-layouts-modified.png)
+
+When the live state differs from the applied layout, the trigger reads "Hot leads (modified)" and
+Revert and Save appear beside it. The comparison ignores widths, since layouts do not store them.
+
+- Add `table_layouts` and the `active_layout_id` and `default_layout_id` columns on
+  `table_preferences`.
+- Actions in `app/Actions/TableLayouts/`: `CreateTableLayout`, `UpdateTableLayout` (rename, share,
+  overwrite state), `DeleteTableLayout`, `SetDefaultTableLayout`. Each authorizes through the policy.
+- `applySavedLayout()` on the trait follows the apply sequence below.
+- "Reset" returns the table to the member's default layout, or to the table's default state when
+  they have none, and clears the "(modified)" mark.
+- All labels go through `__()` in `lang/en/filament/`.
+
+What a member sees on opening a table:
+
+1. Their last state always wins. They see exactly what they left, with "(modified)" when they
+   had changed an applied layout.
+2. Their default layout applies only when they have no saved state for that table yet, and
+   after Reset.
+3. With neither, the table's default state.
+
+When a shared layout changes under a member who has it applied or as their default:
+
+| The owner or an Admin | The member's table | The member's pointers |
+|---|---|---|
+| overwrites it, and the member had not changed it | takes the new version on their next visit | unchanged |
+| overwrites it, and the member had changed it | keeps the member's copy, still "(modified)" | unchanged |
+| unshares or deletes it | keeps what it shows | active and default cleared |
+
+To tell "had not changed it" apart, the preference row stores the hash of the layout state it
+last applied. "Set as my default" may point at any layout the member can see, including someone
+else's shared one. When the member can no longer see it, the default is cleared on load.
+
+Prove first: a render hook closure has no access to the page component. The control must still
+mount the page's actions and call `applySavedLayout()`. Settle how before building the menu.
+
+Done when:
+
+- A layout applies columns, sort, filters, search, grouping and page size in one call, and the
+  filter popover shows the applied filters.
+- A layout holding a page size outside the table's options falls back to the default instead of
+  applying.
+- The permission rules below hold, each covered by a test.
+- Changing the table after applying a layout shows "(modified)"; Revert restores the layout; Save
+  overwrites it.
+
+### Phase 4: Column menu and reorder
+
+Each header gets a drag grip and a menu. Both change state that phase 2 already saves, so this
+phase adds no storage.
+
+![Drag grips on every header](assets/table-layouts/phase-4-header-grips.png)
+![The column menu](assets/table-layouts/phase-4-column-menu.png)
+
+A `⋯` button appears on a header on hover and on keyboard focus. Its menu holds Sort ascending
+and Sort descending, then Move left and Move right, then Hide column. A header click keeps
+sorting as today; the menu does not replace it.
+
+![Dragging a header: the column lifts and a line marks the drop point](assets/table-layouts/phase-4-drag-reorder.png)
+
+Dragging a grip lifts the column, leaves its slot empty, and draws a line at the drop point. A
+drop calls one Livewire method that reorders the column state through
+`applyTableColumnManager(..., wasReordered: true)`. Move left and Move right call the same
+method, and they are the keyboard path for reordering.
+
+- The drag lives in `resizable-columns.js`, beside the resize handles, so the two never fight
+  over a mouse down on the header.
+- Hide appears only on toggleable columns. Move left and Move right are disabled at the edges.
+- The title column (`CrmEntity::titleColumn()`) stays first: it has no grip, no Move items and
+  no Hide, and nothing can be dropped before it.
+- Every label goes through `__()`.
+
+Done when:
+
+- Sort, Move and Hide from the menu, and a drag, each change the table and survive a reload.
+- The column manager's order and the header order always agree.
+- The menu and the grip work by keyboard alone.
+
+### Phase 5: Pinned columns
+
+A member pins columns to the left edge. Pinned columns stay put while the rest of the table
+scrolls sideways under them.
+
+![The column menu with Pin to left](assets/table-layouts/phase-5-column-menu.png)
+![Company pinned while the table is scrolled right](assets/table-layouts/phase-5-pinned.png)
+![The same in dark mode](assets/table-layouts/phase-5-pinned-dark.png)
+
+- The menu gains "Pin to left", shown as "Unpin" on a pinned column. A pinned header shows a
+  pushpin in place of the grip.
+- Pinned columns sit together at the left, after the selection checkbox, in pin order. Pinning
+  moves a column there; unpinning returns it to the first unpinned position.
+- The title column stays first (phase 4). Pinning any column pins the title column first, and
+  the title column cannot be unpinned while another column is pinned. (Designer's call.)
+- The selection column is pinned whenever any column is.
+- The last pinned column carries an edge shadow while the table is scrolled.
+- Sticky positioning lives in `resizable-columns.js`, because that script owns cell styles (see
+  phase 1). It recomputes offsets when a pinned column is resized.
+- `TableStateData` gains `pinned`. Pins are saved in table state and in layouts.
+
+Done when:
+
+- A pin survives a reload and is restored by the layout it was saved in.
+- Resizing a pinned column moves the columns pinned after it.
+- Pinned cells paint above scrolled cells, row hovers and the selection state, in Chromium and
+  WebKit, light and dark.
+
+## Domain model
+
+Two tables with ULID keys, matching the CRM convention. Both have factories.
+
+### `table_preferences`: one row per member, per workspace, per table
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | ulid | primary key |
+| `workspace_id` | ulid | foreign key, cascade on delete |
+| `user_id` | ulid | foreign key, cascade on delete |
+| `entity` | string | a `CrmEntity` value, cast to the enum |
+| `state` | jsonb | a `TableStateData` |
+| `active_layout_id` | ulid, nullable | phase 3; foreign key to `table_layouts`, null on delete |
+| `default_layout_id` | ulid, nullable | phase 3; foreign key to `table_layouts`, null on delete |
+| `applied_layout_hash` | string, nullable | phase 3; hash of the layout state last applied, to tell a clean copy from a changed one |
+| `created_at`, `updated_at` | timestamp | |
+
+Unique on `(user_id, workspace_id, entity)`.
+
+### `table_layouts`: one row per saved layout (phase 3)
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | ulid | primary key |
+| `workspace_id` | ulid | foreign key, cascade on delete |
+| `user_id` | ulid | the owner; foreign key, cascade on delete |
+| `entity` | string | a `CrmEntity` value, cast to the enum |
+| `name` | string | unique per owner per table, ignoring case |
+| `is_shared` | boolean | default false |
+| `state` | jsonb | a `TableStateData`, without widths |
+| `created_at`, `updated_at` | timestamp | |
+
+Unique on `(user_id, workspace_id, entity, lower(name))`, so "Hot leads" and "hot leads" clash.
+Index on `(workspace_id, entity)`.
+
+### Relationships
+
+```
+Workspace 1 ──< TablePreference >── 1 User
+Workspace 1 ──< TableLayout       >── 1 User (owner)
+TablePreference ── active_layout  ──> 0..1 TableLayout
+TablePreference ── default_layout ──> 0..1 TableLayout
+```
+
+Both models carry `WorkspaceScope`, like the CRM models, and the code that reads them also
+filters by user explicitly.
+
+### `TableStateData`
+
+A spatie/laravel-data object in `app/Data/`, serialized into both `state` columns. It is
+rebuilt from stored JSON, which is the case `architecture.md` assigns to laravel-data.
+
+| Field | Shape | Since |
+|---|---|---|
+| `columns` | ordered list of `{type, name, isToggled}` | 2 |
+| `sort` | `"{column}:{direction}"` or null | 2 |
+| `filters` | the raw filter form state | 2 |
+| `search` | string or null | 2 |
+| `columnSearches` | map of column to term | 2 |
+| `grouping` | `"{group}:{direction}"` or null | 2 |
+| `perPage` | int or `"all"` | 2 |
+| `widths` | map of column to pixels; preferences only | 2 |
+| `pinned` | ordered list of column names | 5 |
+
+A field added later defaults to empty, so a row saved before it loads unchanged.
+
+### Self-healing
+
+State stores column names, and custom field columns come and go. On load, a column the table no
+longer has is dropped and a column the state does not know is appended with its default
+visibility. The same applies to filters, pins and widths. Filament's
+`syncReorderableColumnsFromDefaultTableColumnState()` already does this for columns. A filter
+key for a deleted custom field is re-filled into the form and ignored by the query; the
+implementation asserts this rather than assuming it.
+
+Healing happens in memory. The row is rewritten only when the member next changes something.
+
+## Permissions
+
+`TableLayoutPolicy`. It does not reuse `ChecksWorkspaceWriteAccess`: that trait excludes Viewers,
+and a layout touches no CRM data.
+
+| Who | Own private layout | Own shared layout | Someone else's shared layout | Someone else's private layout |
+|---|---|---|---|---|
+| Any member, Viewers included | see, edit, delete | see, edit, delete | see, apply | nothing |
+| Workspace Admin | see, edit, delete | see, edit, delete | see, apply, edit, delete | nothing |
+
+Any member may create and share a layout. When a member leaves the workspace, their preferences
+and private layouts stay unused, and their shared layouts stay visible and manageable by Admins.
+
+## Filament internals
+
+Verified by #944 against `filament/tables` v5.9.0, which is still the installed version.
+Re-verify if it changes. Method names are stable references; line numbers are not.
+
+- **Every session write is gated.** Each `session()->put` for table state sits behind a
+  `persists*InSession()` check. Six of the seven flags default to false and nothing in `app/`
+  turns them on. `persistsColumnsInSession` defaults to true (`HasColumnManager`). So today only
+  column state survives within a session; sort, filters, search, grouping and page size are not
+  remembered at all, and phase 2 is new behaviour for them. With
+  `persistColumnsInSession(false)` set in `AppPanelProvider`, Filament stops writing table
+  state to the session.
+- **Columns need one override.** With session persistence off,
+  `loadTableColumnsFromSession()` returns the default column state, so the override replaces
+  the method body. `initTableColumnManager()` calls it only on first mount.
+  `applyTableColumnManager(?array $state, bool $wasReordered)` is the public apply entry point.
+- **State shapes.** `tableSort` is `"{column}:{direction}"`, `tableGrouping` is
+  `"{groupId}:{direction}"`, `tableFilters` is the raw filter form state, `tableRecordsPerPage`
+  is an int or `all`, and `tableColumns` is an ordered list of column descriptors. Only `type`,
+  `name` and `isToggled` are stored; the rest is re-derived from the live column.
+- **Mount ordering.** `#[Url]` values land before `mountInteractsWithTable()`, which runs before
+  the restore block in `bootedInteractsWithTable()`. That makes it the seeding hook. `getTable()`
+  is not available that early.
+- **No remount is needed to apply a layout.** `ListRecords` binds filters, sort, search, grouping
+  and the active tab to the query string in replace mode, so a server-side assignment rewrites
+  the URL in place.
+- **Page size is not validated at runtime.** Only the mount-time default checks it against
+  `getPaginationPageOptions()`, so the apply path validates it.
+
+## Apply sequence
+
+Order matters. `applySavedLayout()`:
+
+1. `applyTableColumnManager($columns, wasReordered: true)` first: it flushes the cached visible
+   columns that sort and search validity depend on.
+2. `$this->tableSort = ...`, then `updatedTableSort()`.
+3. `$this->tableGrouping = ...`, then `updatedTableGrouping()`.
+4. Search: assign and call `updatedTableSearch()`, or `resetTableSearch()` when the layout has
+   none.
+5. Column searches: assign and call `updatedTableColumnSearches()`, or
+   `resetTableColumnSearches()`.
+6. Page size: validate against `getPaginationPageOptions()`, fall back to
+   `getDefaultTableRecordsPerPageSelectOption()`, assign, then `updatedTableRecordsPerPage()`.
+7. `getTableFiltersForm()->fill($filters)`: the popover does not rehydrate itself, and without
+   this it shows stale filters.
+8. `applyTableFilters()`.
+9. `flushCachedTableRecords()` if records were already resolved this request.
+10. Phase 5: apply pins.
+
+Never call `resetTable()`: it re-runs the whole booted block and blanks the filter form.
+
+## Edge cases
+
+- **Two tabs.** The last write wins. Accepted.
+- **Shared URL.** Query-string sort, filters and search win over saved state on mount.
+- **Workspace isolation.** Every row carries `workspace_id`, and with session persistence off
+  Filament keeps no copy that could cross workspaces.
+- **Column groups.** Filament stores them by translated label. None of the five tables has one;
+  revisit if one is added.
+
+## Code layout
+
+| Path | Holds | Phase |
+|---|---|---|
+| `app/Filament/Tables/Concerns/HasResizableColumns.php` | resize trait | 1 |
+| `app/Filament/Tables/Macros/ResizableColumnsMacro.php` | resize macro | 1 |
+| `resources/js/filament/resizable-columns.js` | resize, then drag, then sticky | 1, 4, 5 |
+| `app/Filament/Tables/Concerns/PersistsTableState.php` | state trait | 2 |
+| `app/Models/TablePreference.php`, `app/Models/TableLayout.php` | models | 2, 3 |
+| `app/Data/TableStateData.php` | state object | 2 |
+| `app/Actions/TableLayouts/` | `SaveTablePreference`, layout actions | 2, 3 |
+| `app/Policies/TableLayoutPolicy.php` | policy | 3 |
+
+## Tests
+
+Feature tests through `livewire(ListCompanies::class)` and the other four pages, in
+`tests/Feature/Filament/App/Resources/`. One browser test per phase for the interaction a
+feature test cannot reach (dragging, the toolbar menu, sticky scrolling), run in Chromium and
+WebKit. No migration tests: rehearse each migration on anonymized production data, per
+`core.md`.
+
+## Left to the builder
+
+- How the toolbar control reaches the page component (phase 3, proved first).
+- The exact markup and styling, within the mockups and the theme variables.
+- Where the drag threshold sits, and the drag behaviour on touch screens.
+- What happens when pinned columns are wider than the viewport. The table must stay usable on a
+  narrow screen.
