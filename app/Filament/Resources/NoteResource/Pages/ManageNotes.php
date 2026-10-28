@@ -9,6 +9,7 @@ use App\Filament\Concerns\HasNoteHeaderActions;
 use App\Filament\Concerns\HasViewSwitcher;
 use App\Filament\Resources\NoteResource;
 use App\Filament\Tables\Concerns\HasResizableColumns;
+use App\Filament\Tables\Concerns\PersistsTableState;
 use Filament\Resources\Pages\ManageRecords;
 use Livewire\Attributes\On;
 
@@ -18,6 +19,7 @@ final class ManageNotes extends ManageRecords
     use HasNoteHeaderActions;
     use HasResizableColumns;
     use HasViewSwitcher;
+    use PersistsTableState;
 
     protected static string $resource = NoteResource::class;
 

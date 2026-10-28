@@ -8,6 +8,7 @@ use App\Filament\Concerns\HasCustomFieldColumns;
 use App\Filament\Exports\PeopleExporter;
 use App\Filament\Resources\PeopleResource;
 use App\Filament\Tables\Concerns\HasResizableColumns;
+use App\Filament\Tables\Concerns\PersistsTableState;
 use App\Models\People;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -23,6 +24,7 @@ final class ListPeople extends ListRecords
 {
     use HasCustomFieldColumns;
     use HasResizableColumns;
+    use PersistsTableState;
 
     protected static string $resource = PeopleResource::class;
 

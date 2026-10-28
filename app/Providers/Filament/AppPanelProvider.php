@@ -29,6 +29,7 @@ use App\Filament\Resources\OpportunityResource;
 use App\Filament\Resources\OpportunityResource\Pages\OpportunitiesBoard;
 use App\Filament\Resources\TaskResource;
 use App\Filament\Resources\TaskResource\Pages\TasksBoard;
+use App\Filament\Tables\Concerns\PersistsTableState;
 use App\Http\Controllers\SyncUserTimezoneController;
 use App\Http\Middleware\ApplyTenantScopes;
 use App\Http\Middleware\CheckScheduledDeletion;
@@ -160,16 +161,7 @@ final class AppPanelProvider extends PanelProvider
             ? $emptyState->compact()
             : $emptyState);
 
-        // Table and Schema configuration is global, so both callbacks have to check
-        // which panel is actually serving the request before they touch the format.
-        Table::configureUsing(fn (Table $table): Table => $this->isCurrentPanel()
-            ? $table
-                ->defaultDateTimeDisplayFormat(self::DATE_TIME_FORMAT)
-                ->reorderableColumns()
-                ->columnManager(! $table->getLivewire() instanceof RelationManager)
-                ->defaultPaginationPageOption(self::DEFAULT_PAGINATION_PAGE_OPTION)
-                ->paginationPageOptions(fn (HasTable $livewire): array => $this->paginationPageOptions($livewire))
-            : $table);
+        $this->configureTables();
 
         $this->formatDateTimesInSchemas();
 
@@ -221,6 +213,24 @@ final class AppPanelProvider extends PanelProvider
                 return day === date && focusedMonth === month - 1 && focusedYear === year;
             }
             JS;
+    }
+
+    private function configureTables(): void
+    {
+        // Table and Schema configuration is global, so both callbacks have to check
+        // which panel is actually serving the request before they touch the format.
+        Table::configureUsing(fn (Table $table): Table => $this->isCurrentPanel()
+            ? $table
+                ->defaultDateTimeDisplayFormat(self::DATE_TIME_FORMAT)
+                ->reorderableColumns()
+                ->columnManager(! $table->getLivewire() instanceof RelationManager)
+                ->defaultPaginationPageOption(self::DEFAULT_PAGINATION_PAGE_OPTION)
+                ->paginationPageOptions(fn (HasTable $livewire): array => $this->paginationPageOptions($livewire))
+                ->when(
+                    in_array(PersistsTableState::class, class_uses_recursive($table->getLivewire()), true),
+                    fn (Table $table): Table => $table->persistInSession(false),
+                )
+            : $table);
     }
 
     /** @return list<int> */

@@ -10,6 +10,7 @@ use App\Filament\Concerns\HasViewSwitcher;
 use App\Filament\Exports\TaskExporter;
 use App\Filament\Resources\TaskResource;
 use App\Filament\Tables\Concerns\HasResizableColumns;
+use App\Filament\Tables\Concerns\PersistsTableState;
 use App\Models\Task;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -28,6 +29,7 @@ final class ManageTasks extends ManageRecords
     use HasCustomFieldColumns;
     use HasResizableColumns;
     use HasViewSwitcher;
+    use PersistsTableState;
 
     protected static string $resource = TaskResource::class;
 

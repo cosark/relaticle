@@ -8,6 +8,7 @@ use App\Filament\Concerns\HasCustomFieldColumns;
 use App\Filament\Exports\CompanyExporter;
 use App\Filament\Resources\CompanyResource;
 use App\Filament\Tables\Concerns\HasResizableColumns;
+use App\Filament\Tables\Concerns\PersistsTableState;
 use App\Models\Company;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -23,6 +24,7 @@ final class ListCompanies extends ListRecords
 {
     use HasCustomFieldColumns;
     use HasResizableColumns;
+    use PersistsTableState;
 
     /** @var class-string<CompanyResource> */
     protected static string $resource = CompanyResource::class;
