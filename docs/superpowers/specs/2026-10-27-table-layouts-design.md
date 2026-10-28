@@ -68,6 +68,22 @@ The feature fails, even if every test passes, when:
 | Name | "Layout": Save layout, My layouts, Delete layout. Models `TableLayout` and `TablePreference` | "View": the list, board and cards switcher (`RemembersViewMode`) already owns that word, and `architecture.md` allows one word per concept |
 | Default page size | 25, already set on `main` (`AppPanelProvider::DEFAULT_PAGINATION_PAGE_OPTION`) | 10 |
 
+## Prior art
+
+#944 reviewed seven Filament plugins on 2026-09-17. None fits.
+
+| Package | Stores | Workspace-aware | Verdict |
+|---|---|---|---|
+| kisame76/filament-db-table-state | all session table state, automatically | no | beta, a DB read per table request, swallows errors |
+| Advanced Tables (archilex) | named views, favorites, shared views, approval | yes | paid and closed source; only worth it if curated team views become a product goal |
+| wotz/filament-table-filter-presets | named filter and column presets | no | v0.x, but its "set as default" and remount-to-apply ideas are worth borrowing |
+| hydrat/filament-table-layout-toggle | grid versus table layout | no | different problem; its storage-driver interface is the only idea |
+| Bostos/reorderable-columns, KozSuper/Filament-Table-Views, guiu/filament-filter-presets | column order or named views | no | Filament v3 only, stale |
+
+In-house wins on three counts. Workspace scoping is mandatory here and absent from every free
+package. Our custom field columns differ per workspace. And the write path has to go through an
+action class to satisfy `EloquentWriteOutsideActionRule`.
+
 ## Phases
 
 Phases 1 to 3 are what #943 promises. Phases 4 and 5 are in scope and follow them. Each phase
@@ -105,7 +121,10 @@ repository. Its README names each file.
 - The resize half of `submissions.js` (from the "resizableColumn Alpine component" banner to
   the end, minus the expandable-text wiring) to `resources/js/filament/resizable-columns.js`,
   registered with `FilamentAsset::register()` like `payload-guard.js`. Commit the published copy
-  under `public/js/app/`.
+  under `public/js/app/`. It already survives our `->spa()` panel, so keep these three hooks:
+  `livewire:navigated` sets up the table after an SPA page switch, the `morphed` Livewire hook
+  restores the handles a re-render strips, and the Alpine data factory registers immediately
+  when Alpine is running, else on `alpine:init`.
 - The resize rules of `submissions.css` (those targeting `fi-ta-resizable-*`,
   `data-resizable-*` and `column-resize-*`) folded into `resources/css/filament/app/theme.css`.
 - Remove the package from `composer.json`, `ResizedColumnPlugin` from `AppPanelProvider`, and
@@ -138,11 +157,12 @@ Done when:
 ### Phase 2: Remembered table state
 
 Everything a member does to a table is saved per member, per workspace and per table, and comes
-back on their next visit on any device. No new UI. Only column state is remembered today, and
-only within a session; the rest is new.
+back on their next visit on any device. No new UI. Only column state and page size are remembered
+today, and only within a session; the rest is new.
 
-- Turn off Filament's session persistence for table state in `AppPanelProvider`, scoped to the
-  app panel (see Filament internals). The database becomes the only store.
+- Turn off Filament's session persistence for table state with `persistInSession(false)` in
+  `AppPanelProvider`, scoped to the app panel (see Filament internals). The database becomes the
+  only store.
 - Add `table_preferences` and `TableStateData` (see Domain model).
 - Add the `PersistsTableState` trait to the five pages:
   1. `loadTableColumnsFromSession()`: return the stored column state, else the default.
@@ -186,7 +206,9 @@ Revert and Save appear beside it. The comparison ignores widths, since layouts d
   `table_preferences`.
 - Actions in `app/Actions/TableLayouts/`: `CreateTableLayout`, `UpdateTableLayout` (rename, share,
   overwrite state), `DeleteTableLayout`, `SetDefaultTableLayout`. Each authorizes through the policy.
-- `applySavedLayout()` on the trait follows the apply sequence below.
+- `applySavedLayout()` on the trait follows the apply sequence below. The trait's save, save as
+  new, rename, share, set-default, reset and delete entry points each delegate to one of these
+  actions and write nothing themselves.
 - "Reset" returns the table to the member's default layout, or to the table's default state when
   they have none, and clears the "(modified)" mark.
 - All labels go through `__()` in `lang/en/filament/`.
@@ -377,27 +399,42 @@ and private layouts stay unused, and their shared layouts stay visible and manag
 
 ## Filament internals
 
-Verified by #944 against `filament/tables` v5.9.0, which is still the installed version.
+Verified against `filament/tables` v5.9.0 by #944, and again on 2026-10-28.
 Re-verify if it changes. Method names are stable references; line numbers are not.
 
 - **Every session write is gated.** Each `session()->put` for table state sits behind a
-  `persists*InSession()` check. Six of the seven flags default to false and nothing in `app/`
-  turns them on. `persistsColumnsInSession` defaults to true (`HasColumnManager`). So today only
-  column state survives within a session; sort, filters, search, grouping and page size are not
-  remembered at all, and phase 2 is new behaviour for them. With
-  `persistColumnsInSession(false)` set in `AppPanelProvider`, Filament stops writing table
-  state to the session.
+  `persists*InSession()` check, both in the restore block of `bootedInteractsWithTable()` and in
+  the update hooks: `HasFilters::handleTableFilterUpdates()`, `CanSortRecords::updatedTableSort()`
+  and `updatedTableSortDirection()`, `CanSearchRecords::updatedTableSearch()` and
+  `updatedTableColumnSearches()`, `CanGroupRecords::updatedTableGrouping()`,
+  `CanPaginateRecords::updatedTableRecordsPerPage()`, and `HasColumnManager::persistTableColumns()`
+  and `persistHasReorderedTableColumns()`.
+- **Two of the seven flags default to true.** `persistsColumnsInSession` (`HasColumnManager`) and
+  `persistsRecordsPerPageInSession` (`CanPaginateRecords`). Filters, sort, search, column
+  searches and grouping default to false, and nothing in `app/` turns them on. So today only
+  column state and page size survive within a session, and phase 2 is new behaviour for the
+  rest. `persistInSession(false)` in `AppPanelProvider` turns off all seven, and Filament stops
+  writing table state to the session.
 - **Columns need one override.** With session persistence off,
-  `loadTableColumnsFromSession()` returns the default column state, so the override replaces
-  the method body. `initTableColumnManager()` calls it only on first mount.
+  `loadTableColumnsFromSession()` returns the default column state and `persistTableColumns()`
+  does nothing, so the override replaces the method body rather than wrapping `parent::`.
+  `initTableColumnManager()` calls it only when `tableColumns` is blank, which is the first mount.
   `applyTableColumnManager(?array $state, bool $wasReordered)` is the public apply entry point.
+- **A saved column order survives without the session.** Filament keeps the member's order only
+  when a reorder flag is set, and otherwise resets to the default order. With session persistence
+  on, that flag lives in the session. With it off, `applyTableColumnManager()` derives it from
+  `$wasReordered || hasReorderedTableColumns()`, so the stored order holds.
 - **State shapes.** `tableSort` is `"{column}:{direction}"`, `tableGrouping` is
   `"{groupId}:{direction}"`, `tableFilters` is the raw filter form state, `tableRecordsPerPage`
   is an int or `all`, and `tableColumns` is an ordered list of column descriptors. Only `type`,
   `name` and `isToggled` are stored; the rest is re-derived from the live column.
-- **Mount ordering.** `#[Url]` values land before `mountInteractsWithTable()`, which runs before
-  the restore block in `bootedInteractsWithTable()`. That makes it the seeding hook. `getTable()`
-  is not available that early.
+- **Mount ordering.** Livewire runs `boot`, `bootTrait`, `initializeTrait`, `mount`, `mountTrait`,
+  `booted` and `bootedTrait`, and `#[Url]` values land before all of them. So
+  `mountInteractsWithTable()` runs after the URL values and before the restore block in
+  `bootedInteractsWithTable()`. That makes it the seeding hook, with two constraints. The table
+  is built in `bootedInteractsWithTable()`, so `getTable()` is not available yet and the seed
+  assigns raw values only. Each restore step runs only when its property is blank, so a seeded
+  value stops Filament from overwriting it.
 - **No remount is needed to apply a layout.** `ListRecords` binds filters, sort, search, grouping
   and the active tab to the query string in replace mode, so a server-side assignment rewrites
   the URL in place.
@@ -432,8 +469,10 @@ Never call `resetTable()`: it re-runs the whole booted block and blanks the filt
 - **Shared URL.** Query-string sort, filters and search win over saved state on mount.
 - **Workspace isolation.** Every row carries `workspace_id`, and with session persistence off
   Filament keeps no copy that could cross workspaces.
-- **Column groups.** Filament stores them by translated label. None of the five tables has one;
-  revisit if one is added.
+- **Column groups.** A `ColumnGroup` has no key, only a label. `mapTableColumnGroupToArray()`
+  stores the escaped, translated label as its name, so a group saved in one language does not
+  match in another and loses its settings. None of the five tables has one. If one is added,
+  match a stored group by the column names inside it.
 
 ## Code layout
 
