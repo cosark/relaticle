@@ -15,7 +15,7 @@
 - Scope is exactly five pages: `ListCompanies`, `ListPeople`, `ListOpportunities`, `ManageTasks`, `ManageNotes`.
 - Server clamp: `40` to `1000` px. A width of `0` or below, or a non-number, is ignored.
 - Default width for a column with no saved width and no `->width()`: `180` px.
-- System columns that are fixed width when they declare neither `->width()` nor `->grow()`: names matching `/^id$/`, `/_at$/`, `/^user\.name$/`.
+- Every data column renders an exact width; the actions column takes the space left over. (Changed after review of a wide-screen bug: the Maxforms fixed/elastic split was dropped, see the ledger.)
 - Widths live in the session only, keyed per page class. No migration, no model.
 - Colours come from the panel's CSS variables (`--gray-*`, `--primary-*`, `--danger-*`). No `rgb()` or hex value in the ported CSS.
 - No em-dash anywhere (`tests/Arch/ConventionsTest.php`). Comments: two lines at most, only a non-obvious why.

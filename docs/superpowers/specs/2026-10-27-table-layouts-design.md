@@ -117,8 +117,11 @@ repository. Its README names each file.
   because the Livewire action accepts any payload.
 - The Maxforms macro becomes a plain static `ResizableColumns::apply()` in `app/Filament/Tables/`,
   because a `Table` macro call fails PHPStan without a new ignore. It owns the 40 and 1000 px
-  bounds as `MIN_WIDTH` and `MAX_WIDTH`: PHP cannot read a trait's constant directly. Keep the
-  fixed and elastic classification: it stops a timestamp column stretching across a wide monitor.
+  bounds as `MIN_WIDTH` and `MAX_WIDTH`: PHP cannot read a trait's constant directly.
+- Every data column gets an exact width, and the actions column takes the space left over, so a
+  drag always changes a column by the amount shown. The Maxforms "elastic" columns carried only a
+  `min-width`, which the browser ignores under `table-layout: fixed`, so on a wide screen a drag
+  did nothing. That split is dropped.
 - The resize half of `submissions.js` (from the "resizableColumn Alpine component" banner to
   the end, minus the expandable-text wiring) to `resources/js/filament/resizable-columns.js`,
   registered with `FilamentAsset::register()` like `payload-guard.js`. Commit the published copy

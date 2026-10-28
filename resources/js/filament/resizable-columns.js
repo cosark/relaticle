@@ -1,8 +1,8 @@
 // Ported from Maxforms (de1c8eeb9). Each header rendered by ResizableColumns::apply()
 // runs one `resizableColumn` instance, which owns its drag handle.
 
-// Fixed columns carry an exact width. Elastic columns carry a floor and share the leftover
-// space under `table-layout: fixed`, so the table never leaves a gap on the right.
+// Every data column carries an exact width. Under `table-layout: fixed` the actions column,
+// which has only a floor, takes whatever space is left so the table still fills its wrapper.
 const SELECTION_CELL_WIDTH = 52
 // Only fits an ActionGroup trigger: bare row actions would overflow into the next column.
 const ACTIONS_CELL_WIDTH = 64
@@ -178,38 +178,10 @@ function applyTableSizing(table) {
 
     const wrapper = table.closest('.fi-ta-content-ctn')
     const wrapperWidth = wrapper?.clientWidth ?? 0
-    const sumOfFloors = computeMinTableWidth(table)
+    const columnsWidth = computeMinTableWidth(table)
 
-    // When the columns overflow, elastic columns get exact widths: the browser would
-    // otherwise average a dragged width away when it shares the space out.
-    if (sumOfFloors > wrapperWidth) {
-        table.style.width = `${sumOfFloors}px`
-        table.style.minWidth = ''
-        applyElasticWidths(table, true)
-    } else {
-        table.style.width = '100%'
-        table.style.minWidth = ''
-        applyElasticWidths(table, false)
-    }
-}
-
-function applyElasticWidths(table, pinned) {
-    table.querySelectorAll('thead th[data-resizable-type="elastic"]').forEach((th) => {
-        const saved = th.dataset.resizableWidth
-        const columnId = th.dataset.resizableColumnId
-        if (!saved || !columnId) return
-
-        const header = pinned
-            ? `min-width: ${saved}px; width: ${saved}px; max-width: ${saved}px`
-            : `min-width: ${saved}px`
-        const cell = `${header}; overflow: hidden`
-
-        th.style.cssText = header
-        table.querySelectorAll(`[data-resizable-column-id="${CSS.escape(columnId)}"]`).forEach((node) => {
-            if (node === th) return
-            node.style.cssText = cell
-        })
-    })
+    table.style.width = columnsWidth > wrapperWidth ? `${columnsWidth}px` : '100%'
+    table.style.minWidth = ''
 }
 
 const widthRecalcPending = new WeakSet()
@@ -452,10 +424,7 @@ function registerResizableColumn() {
         },
 
         applyWidth(width) {
-            const isElastic = this.column.dataset.resizableType === 'elastic'
-            const headerStyle = isElastic
-                ? `min-width: ${width}px`
-                : `min-width: ${width}px; width: ${width}px; max-width: ${width}px`
+            const headerStyle = `min-width: ${width}px; width: ${width}px; max-width: ${width}px`
             const cellStyle = `${headerStyle}; overflow: hidden`
 
             this.column.style.cssText = headerStyle

@@ -63,14 +63,13 @@ it('marks every column resizable', function (string $page): void {
         expect(headerAttributes($component, $column)['x-data'])->toStartWith("resizableColumn('{$column}'");
     }
 
-    expect(headerAttributes($component, 'created_at')['data-resizable-type'])->toBe('fixed')
-        ->and(headerAttributes($component, titleColumnOf($component))['data-resizable-type'])->toBe('elastic');
 })->with('list pages');
 
-it('gives a column the default width', function (string $page): void {
-    $component = livewire($page);
+it('gives a column an exact default width', function (string $page): void {
+    $attributes = headerAttributes($component = livewire($page), titleColumnOf($component));
 
-    expect(headerAttributes($component, titleColumnOf($component))['data-resizable-width'])->toBe('180');
+    expect($attributes['data-resizable-width'])->toBe('180')
+        ->and($attributes['style'])->toBe('min-width: 180px; width: 180px; max-width: 180px');
 })->with('list pages');
 
 it('keeps a width for the session', function (string $page): void {

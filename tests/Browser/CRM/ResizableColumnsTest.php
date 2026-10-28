@@ -125,3 +125,20 @@ it('keeps the table head pinned while the page scrolls', function (): void {
         ->assertScript($headOffset, 0)
         ->assertNoJavaScriptErrors();
 });
+
+it('resizes a column by the dragged amount when the table is narrower than the screen', function (): void {
+    $page = loginViaBrowser($this->user)
+        ->assertPathIs("/app/{$this->workspace->slug}")
+        ->resize(2200, 900)
+        ->navigate("/app/{$this->workspace->slug}/companies")
+        ->assertVisible(headerSelector('accountOwner.name').' .column-resize-handle-bar');
+
+    $before = $page->script(headerWidth('accountOwner.name'));
+
+    $page->script(dragColumnEdge('accountOwner.name', 120));
+    $page->assertScript(headerWidth('accountOwner.name'), $before + 120);
+
+    $page->script(dragColumnEdge('accountOwner.name', -60));
+    $page->assertScript(headerWidth('accountOwner.name'), $before + 60)
+        ->assertNoJavaScriptErrors();
+});
