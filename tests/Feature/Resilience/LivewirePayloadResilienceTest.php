@@ -8,6 +8,7 @@ use Filament\Livewire\Notifications;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use Livewire\Exceptions\MethodNotFoundException;
@@ -149,4 +150,17 @@ it('logs a tampered update at warning level with the class and the request ip', 
             && ($context['ip'] ?? null) === '127.0.0.1'
             && isset($context['components']),
     )->once();
+});
+
+it('reports an exception raised before the console request is bound', function (): void {
+    Exceptions::fake();
+    $request = resolve('request');
+    app()->forgetInstance('request');
+    Request::clearResolvedInstance();
+
+    report(new RuntimeException('console boot error'));
+
+    app()->instance('request', $request);
+
+    Exceptions::assertReported(RuntimeException::class);
 });
