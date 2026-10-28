@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Relaticle\SystemAdmin\Actions;
 
 use App\Enums\Plan;
-use App\Enums\StripeSubscriptionStatus;
-use App\Enums\SubscriptionType;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -113,7 +111,7 @@ final readonly class TransferWorkspaceBilling
 
         $source->loadMissing('subscriptions');
 
-        throw_if($this->holdsManagedSubscription($source), TransferRefused::class, 'The source workspace has a managed plan subscription. Withdraw it, or cancel it in Stripe, before transferring billing.');
+        throw_if($source->hasOpenManagedSubscription(), TransferRefused::class, 'The source workspace has a managed plan subscription. Withdraw it, or cancel it in Stripe, before transferring billing.');
 
         $subscription = $source->subscription();
 
@@ -128,11 +126,5 @@ final readonly class TransferWorkspaceBilling
         throw_if(! $plan instanceof Plan, TransferRefused::class, 'The subscription price is not mapped to a plan.');
 
         return $plan;
-    }
-
-    private function holdsManagedSubscription(Workspace $source): bool
-    {
-        return $source->subscriptions->contains(fn (Subscription $subscription): bool => in_array($subscription->type, SubscriptionType::managed(), true)
-            && ! in_array($subscription->stripe_status, StripeSubscriptionStatus::ended(), true));
     }
 }

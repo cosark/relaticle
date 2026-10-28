@@ -427,6 +427,13 @@ final class Workspace extends Model implements HasAvatar, HasMedia, Onboardable
         return Plan::soldBy($subscription) === $this->plan;
     }
 
+    public function hasOpenManagedSubscription(): bool
+    {
+        return $this->ownedSubscriptions()->contains(fn (mixed $subscription): bool => $subscription instanceof Subscription
+            && in_array($subscription->type, SubscriptionType::managed(), true)
+            && ! in_array($subscription->stripe_status, StripeSubscriptionStatus::ended(), true));
+    }
+
     public function lapsedManagedPlan(): ?Plan
     {
         $lastEnded = $this->ownedSubscriptions()
