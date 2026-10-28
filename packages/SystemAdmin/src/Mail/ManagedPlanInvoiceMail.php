@@ -6,6 +6,7 @@ namespace Relaticle\SystemAdmin\Mail;
 
 use App\Enums\Plan;
 use App\Models\Workspace;
+use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -23,6 +24,7 @@ final class ManagedPlanInvoiceMail extends Mailable implements ShouldQueue
         public Plan $plan,
         public string $hostedInvoiceUrl,
         public int $amount,
+        public ?CarbonImmutable $dueOn = null,
     ) {}
 
     public function envelope(): Envelope
@@ -37,6 +39,7 @@ final class ManagedPlanInvoiceMail extends Mailable implements ShouldQueue
             with: [
                 'planName' => $this->plan->marketingLabel(),
                 'formattedAmount' => Number::currency($this->amount, 'USD', precision: 0),
+                'dueDate' => $this->dueOn?->toFormattedDateString(),
             ],
         );
     }

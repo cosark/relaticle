@@ -77,7 +77,8 @@ return [
         'subject' => 'Your :plan invoice from Relaticle',
         'preheader' => 'Your yearly :plan invoice for :workspace is ready',
         'heading' => 'Your :plan invoice is ready',
-        'line' => 'Relaticle sent an invoice for :amount a year for :workspace on the :plan plan. The plan switches on when it is paid.',
+        'line' => 'Your yearly :plan invoice for :workspace is :amount, due :date. The plan switches on when it is paid.',
+        'line_without_due' => 'Your yearly :plan invoice for :workspace is :amount. The plan switches on when it is paid.',
         'cta' => 'View and pay the invoice',
     ],
 

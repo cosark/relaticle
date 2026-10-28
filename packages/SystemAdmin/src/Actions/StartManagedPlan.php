@@ -8,6 +8,7 @@ use App\Enums\Plan;
 use App\Enums\SubscriptionType;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
@@ -43,7 +44,13 @@ final readonly class StartManagedPlan
         $invoice = Cashier::stripe()->invoices->sendInvoice($this->latestInvoiceId($subscription));
 
         if (filled($billingEmail)) {
-            Mail::to($billingEmail)->send(new ManagedPlanInvoiceMail($workspace, $plan, (string) $invoice->hosted_invoice_url, $yearlyAmount));
+            Mail::to($billingEmail)->send(new ManagedPlanInvoiceMail(
+                $workspace,
+                $plan,
+                (string) $invoice->hosted_invoice_url,
+                $yearlyAmount,
+                is_int($invoice->due_date) ? Date::createFromTimestamp($invoice->due_date) : null,
+            ));
         }
 
         return $subscription;

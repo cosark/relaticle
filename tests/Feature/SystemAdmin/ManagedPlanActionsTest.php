@@ -11,6 +11,7 @@ use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
@@ -36,6 +37,8 @@ mutates(StartManagedPlan::class, WithdrawManagedInvoice::class, ManagedPlan::cla
 
 const HOSTED_INVOICE_URL = 'https://invoice.stripe.com/i/acct_test/test_managed';
 
+const INVOICE_DUE_DATE = 1795996800;
+
 beforeEach(function (): void {
     config()->set('cashier.secret', 'sk_test_fake');
     config()->set('services.stripe.products.concierge', 'prod_concierge_test');
@@ -48,7 +51,7 @@ beforeEach(function (): void {
     $this->stripe = StripeRecorder::install()
         ->respondTo('/v1/customers', ['id' => 'cus_managed_test', 'object' => 'customer', 'email' => 'owner@example.test', 'balance' => 0])
         ->respondTo('/v1/subscriptions', managedSubscriptionBody())
-        ->respondTo('/v1/invoices/in_managed_test/send', ['id' => 'in_managed_test', 'object' => 'invoice', 'hosted_invoice_url' => HOSTED_INVOICE_URL]);
+        ->respondTo('/v1/invoices/in_managed_test/send', ['id' => 'in_managed_test', 'object' => 'invoice', 'hosted_invoice_url' => HOSTED_INVOICE_URL, 'due_date' => INVOICE_DUE_DATE]);
 });
 
 afterEach(function (): void {
@@ -209,9 +212,22 @@ it('mails the billing contact the hosted invoice link', function (): void {
     startManagedPlanFor($workspace, ['plan' => Plan::Concierge->value, 'amount' => 708, 'billing_email' => 'finance@example.test'])
         ->assertHasNoActionErrors();
 
+    $dueOn = Date::createFromTimestamp(INVOICE_DUE_DATE)->toFormattedDateString();
+
     Mail::assertQueued(ManagedPlanInvoiceMail::class, fn (ManagedPlanInvoiceMail $mail): bool => $mail->hasTo('finance@example.test')
         && str_contains($mail->render(), HOSTED_INVOICE_URL)
-        && str_contains($mail->render(), '$708'));
+        && str_contains($mail->render(), "is \$708, due {$dueOn}. The plan switches on when it is paid."));
+});
+
+it('mails the billing contact without a due date when Stripe sends none', function (): void {
+    Mail::fake();
+    $workspace = managedPlanWorkspace();
+    $this->stripe->respondTo('/v1/invoices/in_managed_test/send', ['id' => 'in_managed_test', 'object' => 'invoice', 'hosted_invoice_url' => HOSTED_INVOICE_URL, 'due_date' => null]);
+
+    startManagedPlanFor($workspace, ['plan' => Plan::Concierge->value, 'amount' => 708, 'billing_email' => 'finance@example.test'])
+        ->assertHasNoActionErrors();
+
+    Mail::assertQueued(ManagedPlanInvoiceMail::class, fn (ManagedPlanInvoiceMail $mail): bool => str_contains($mail->render(), 'is $708. The plan switches on when it is paid.'));
 });
 
 it('mails nobody when the billing email is empty', function (): void {
