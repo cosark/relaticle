@@ -29,7 +29,6 @@ use App\Filament\Resources\OpportunityResource;
 use App\Filament\Resources\OpportunityResource\Pages\OpportunitiesBoard;
 use App\Filament\Resources\TaskResource;
 use App\Filament\Resources\TaskResource\Pages\TasksBoard;
-use App\Filament\Tables\Concerns\PersistsTableState;
 use App\Http\Controllers\SyncUserTimezoneController;
 use App\Http\Middleware\ApplyTenantScopes;
 use App\Http\Middleware\CheckScheduledDeletion;
@@ -226,10 +225,6 @@ final class AppPanelProvider extends PanelProvider
                 ->columnManager(! $table->getLivewire() instanceof RelationManager)
                 ->defaultPaginationPageOption(self::DEFAULT_PAGINATION_PAGE_OPTION)
                 ->paginationPageOptions(fn (HasTable $livewire): array => $this->paginationPageOptions($livewire))
-                ->when(
-                    in_array(PersistsTableState::class, class_uses_recursive($table->getLivewire()), true),
-                    fn (Table $table): Table => $table->persistInSession(false),
-                )
             : $table);
     }
 
