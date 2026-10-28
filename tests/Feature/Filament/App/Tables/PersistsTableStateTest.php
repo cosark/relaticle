@@ -112,6 +112,12 @@ it('keeps state apart per workspace', function (): void {
         ->and(savedPreferences())->toBe(2);
 });
 
+it('writes nothing on a follow-up request that changes nothing', function (string $page): void {
+    livewire($page)->call('$refresh')->call('gotoPage', 2)->call('$refresh');
+
+    expect(savedPreferences())->toBe(0);
+})->with('remembered list pages');
+
 it('lets a query string sort win over saved state and writes nothing', function (): void {
     livewire(ListCompanies::class)->set('tableSort', 'created_at:desc');
     $updatedAt = TablePreference::query()->withoutGlobalScopes()->value('updated_at');
@@ -163,7 +169,9 @@ it('stops writing table state to the session', function (): void {
     $component = livewire(ListCompanies::class)->set('tableSort', 'created_at:desc');
     $component->call('applyTableColumnManager', createdAtHiddenAndFirst($component->get('tableColumns')));
 
-    expect(collect(array_keys(session()->all()))->filter(fn (string $key): bool => str_starts_with($key, 'tables.') && ! str_starts_with($key, 'tables.resizable.')))->toBeEmpty();
+    expect(session()->has($component->instance()->getTableSortSessionKey()))->toBeFalse()
+        ->and(session()->has($component->instance()->getTableColumnsSessionKey()))->toBeFalse()
+        ->and(session()->get('filament.tables'))->toBeNull();
 });
 
 it('leaves relation managers on session persistence', function (): void {
