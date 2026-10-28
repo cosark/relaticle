@@ -8,8 +8,8 @@ use App\Filament\Concerns\HasCustomFieldColumns;
 use App\Filament\Concerns\HasViewSwitcher;
 use App\Filament\Exports\OpportunityExporter;
 use App\Filament\Resources\OpportunityResource;
+use App\Filament\Tables\Concerns\HasResizableColumns;
 use App\Models\Opportunity;
-use Asmit\ResizedColumn\HasResizableColumn;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\CreateAction;
@@ -23,7 +23,7 @@ use Relaticle\ImportWizard\Filament\Pages\ImportOpportunities;
 final class ListOpportunities extends ListRecords
 {
     use HasCustomFieldColumns;
-    use HasResizableColumn;
+    use HasResizableColumns;
     use HasViewSwitcher;
 
     protected static string $resource = OpportunityResource::class;
