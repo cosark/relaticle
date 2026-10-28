@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Billing\CreditPackCatalog;
 use App\Services\Billing\HostedWorkspaceAccess;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -192,6 +193,66 @@ it('names the ended subscription on the paused screen', function (): void {
         ->assertDontSee('billing.paused.heading.', false)
         ->assertDontSee(__('billing.paused.heading.trial_ended'));
 });
+
+it('names the lapsed managed plan on the paused screen and offers to restart it first', function (): void {
+    [, $workspace] = billingPageOwner();
+    $workspace->forceFill(['hosted_free_grandfathered_at' => null])->save();
+    endedSubscriptionOn($workspace, 'managed', 'sub_ended_concierge', product: 'prod_concierge_test');
+
+    livewire(Billing::class)
+        ->assertSee(__('billing.paused.heading.managed_ended', ['plan' => 'Cloud Concierge']))
+        ->assertSee(__('billing.paused.owner_body_managed', ['plan' => 'Cloud Concierge', 'workspace' => $workspace->name]))
+        ->assertSee(__('billing.paused.restart_managed', ['plan' => 'Cloud Concierge']))
+        ->assertSee('/contact?plan=concierge', false)
+        ->assertSee(__('billing.paused.continue'))
+        ->assertDontSee(__('billing.paused.heading.subscription_ended'))
+        ->assertDontSee(__('billing.paused.owner_body', ['workspace' => $workspace->name]));
+});
+
+it('names Cloud Pro when Pro ended after an older managed plan', function (): void {
+    [, $workspace] = billingPageOwner();
+    $workspace->forceFill(['hosted_free_grandfathered_at' => null])->save();
+    endedSubscriptionOn($workspace, 'managed', 'sub_ended_concierge', product: 'prod_concierge_test', endedAt: now()->subMonth());
+    endedSubscriptionOn($workspace, 'default', 'sub_ended_pro', product: 'prod_pro_test');
+
+    livewire(Billing::class)
+        ->assertSee(__('billing.paused.heading.subscription_ended'))
+        ->assertDontSee(__('billing.paused.heading.managed_ended', ['plan' => 'Cloud Concierge']));
+});
+
+it('tells a member of a lapsed managed workspace that the owner restarts the plan with us', function (): void {
+    [, $workspace] = billingPageOwner();
+    $workspace->forceFill(['hosted_free_grandfathered_at' => null])->save();
+    endedSubscriptionOn($workspace, 'managed', 'sub_ended_concierge', product: 'prod_concierge_test');
+    $member = User::factory()->create();
+    $workspace->users()->attach($member, ['role' => 'member']);
+
+    test()->actingAs($member);
+    Filament::setTenant($workspace->refresh());
+
+    livewire(Billing::class)
+        ->assertSee(__('billing.paused.member_body_managed', ['owner' => $workspace->owner->name, 'workspace' => $workspace->name, 'plan' => 'Cloud Concierge']))
+        ->assertDontSee(__('billing.paused.restart_managed', ['plan' => 'Cloud Concierge']));
+});
+
+function endedSubscriptionOn(Workspace $workspace, string $type, string $stripeId, string $product, ?CarbonImmutable $endedAt = null): void
+{
+    config()->set('services.stripe.products.concierge', 'prod_concierge_test');
+
+    $workspace->subscriptions()->create([
+        'type' => $type,
+        'stripe_id' => $stripeId,
+        'stripe_status' => 'canceled',
+        'stripe_price' => $type === 'default' ? 'price_pro_monthly_test' : "price_inline_{$stripeId}",
+        'quantity' => 1,
+        'ends_at' => $endedAt ?? now()->subDay(),
+    ])->items()->create([
+        'stripe_id' => "si_{$stripeId}",
+        'stripe_product' => $product,
+        'stripe_price' => $type === 'default' ? 'price_pro_monthly_test' : "price_inline_{$stripeId}",
+        'quantity' => 1,
+    ]);
+}
 
 it('calls it a trial ending when the only subscription was an abandoned checkout', function (): void {
     [, $workspace] = billingPageOwner();

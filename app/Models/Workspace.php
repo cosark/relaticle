@@ -424,9 +424,23 @@ final class Workspace extends Model implements HasAvatar, HasMedia, Onboardable
 
     public function planIsSoldBy(Subscription $subscription): bool
     {
-        $product = $this->plan->stripeProduct();
+        return Plan::soldBy($subscription) === $this->plan;
+    }
 
-        return $product !== null && $subscription->hasProduct($product);
+    public function lapsedManagedPlan(): ?Plan
+    {
+        $lastEnded = $this->ownedSubscriptions()
+            ->filter(fn (mixed $subscription): bool => $subscription instanceof Subscription
+                && in_array($subscription->type, [SubscriptionType::Default->value, SubscriptionType::Managed->value], true)
+                && $subscription->ended())
+            ->sortByDesc('ends_at')
+            ->first();
+
+        if (! $lastEnded instanceof Subscription || $lastEnded->type !== SubscriptionType::Managed->value) {
+            return null;
+        }
+
+        return Plan::soldBy($lastEnded);
     }
 
     public function pendingManagedSubscription(): ?Subscription

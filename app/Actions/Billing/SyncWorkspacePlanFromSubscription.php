@@ -68,9 +68,7 @@ final readonly class SyncWorkspacePlanFromSubscription
             return Plan::fromStripePrice($subscription->stripe_price);
         }
 
-        $product = $subscription->items()->value('stripe_product');
-
-        return Plan::fromStripeProduct(is_string($product) ? $product : null);
+        return Plan::soldBy($subscription);
     }
 
     private function endedMail(Workspace $workspace, Plan $endedPlan): ProEndedMail

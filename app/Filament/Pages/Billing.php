@@ -216,11 +216,14 @@ final class Billing extends Page
         ]);
     }
 
-    /** @return array{billingStatus: BillingStatus, mailboxSyncPaused: bool, otherWorkspaces: Collection<int, Workspace>} */
+    /** @return array{billingStatus: BillingStatus, lapsedPlan: ?Plan, mailboxSyncPaused: bool, otherWorkspaces: Collection<int, Workspace>} */
     private function pausedViewData(Workspace $workspace): array
     {
+        $billingStatus = $workspace->billingStatus();
+
         return [
-            'billingStatus' => $workspace->billingStatus(),
+            'billingStatus' => $billingStatus,
+            'lapsedPlan' => $billingStatus === BillingStatus::SubscriptionEnded ? $workspace->lapsedManagedPlan() : null,
             'mailboxSyncPaused' => $workspace->hasConnectedMailbox(),
             'otherWorkspaces' => $this->user()->allWorkspaces()
                 ->reject(fn (Workspace $other): bool => $other->is($workspace))

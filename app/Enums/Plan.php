@@ -7,6 +7,7 @@ namespace App\Enums;
 use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
 use Illuminate\Support\Arr;
+use Laravel\Cashier\Subscription;
 
 enum Plan: string implements HasColor, HasLabel
 {
@@ -38,6 +39,11 @@ enum Plan: string implements HasColor, HasLabel
         }
 
         return Arr::first(self::cases(), fn (self $plan): bool => $plan->stripeProduct() === $productId);
+    }
+
+    public static function soldBy(Subscription $subscription): ?self
+    {
+        return Arr::first(self::cases(), fn (self $plan): bool => $plan->stripeProduct() !== null && $subscription->hasProduct($plan->stripeProduct()));
     }
 
     /**
