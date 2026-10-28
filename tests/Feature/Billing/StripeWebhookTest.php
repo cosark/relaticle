@@ -6,7 +6,6 @@ use App\Actions\Billing\ActivateManagedPlan;
 use App\Actions\Billing\CancelWithUnusedTimeRefund;
 use App\Actions\Billing\GrantPurchasedCredits;
 use App\Actions\Billing\NotifyWorkspaceOfPaymentFailure;
-use App\Actions\Billing\RememberManagedRenewal;
 use App\Actions\Billing\StartProTrial;
 use App\Actions\Billing\SyncWorkspacePlanFromSubscription;
 use App\Enums\BillingStatus;
@@ -16,6 +15,7 @@ use App\Enums\SubscriptionType;
 use App\Features\Billing as BillingFeature;
 use App\Filament\Pages\Billing;
 use App\Http\Controllers\Billing\StripeWebhookController;
+use App\Jobs\RefreshManagedRenewal;
 use App\Listeners\Billing\SyncPlanOnStripeSubscriptionChange;
 use App\Livewire\App\AppDatabaseNotifications;
 use App\Mail\ProEndedMail;
@@ -49,7 +49,7 @@ mutates(GrantPurchasedCredits::class);
 mutates(NotifyWorkspaceOfPaymentFailure::class);
 mutates(ActivateManagedPlan::class);
 mutates(CancelWithUnusedTimeRefund::class);
-mutates(RememberManagedRenewal::class);
+mutates(RefreshManagedRenewal::class);
 mutates(PaymentFailedNotification::class);
 mutates(ManagedInvoiceOverdueNotification::class);
 mutates(StripeWebhookController::class);
@@ -69,12 +69,16 @@ afterEach(function (): void {
  * @param  array<string, mixed>  $payload
  * @param  array<string, mixed>|null  $stripeHolds
  */
-function sendStripeWebhook(array $payload, string $secret = 'whsec_test_secret', ?array $stripeHolds = null): TestResponse
+function sendStripeWebhook(array $payload, string $secret = 'whsec_test_secret', ?array $stripeHolds = null, array $stripeAlsoAnswers = []): TestResponse
 {
     if (($payload['type'] ?? null) === 'customer.subscription.updated') {
         $subscription = $stripeHolds ?? $payload['data']['object'];
 
-        StripeRecorder::install()->respondTo("/v1/subscriptions/{$subscription['id']}", $subscription);
+        $recorder = StripeRecorder::install()->respondTo("/v1/subscriptions/{$subscription['id']}", $subscription);
+
+        foreach ($stripeAlsoAnswers as $request => $body) {
+            $recorder->respondTo($request, $body);
+        }
     }
 
     if (($payload['type'] ?? null) === 'customer.subscription.deleted' && ! StripeRecorder::current() instanceof StripeRecorder) {
@@ -855,6 +859,7 @@ function stripeManagedSwitch(Workspace $workspace, int $amountPaid = 2400, Plan 
             'object' => 'invoice',
             'status_transitions' => ['paid_at' => now()->getTimestamp()],
         ])
+        ->respondTo('POST /v1/invoices/create_preview', upcomingManagedInvoice(76464))
         ->respondTo('/v1/invoices', stripePaidProInvoice($amountPaid))
         ->respondTo('/v1/invoice_payments', [
             'object' => 'list',
@@ -1401,8 +1406,8 @@ it('remembers the renewal date and amount for the billing page', function (): vo
 
     $renewsAt = stripeManagedSubscriptionBody($workspace)['items']['data'][0]['current_period_end'];
 
-    expect(Cache::get(RememberManagedRenewal::CACHE_PREFIX.'sub_managed_1'))
-        ->toBe(['renews_at' => $renewsAt, 'amount' => 70800, 'currency' => 'usd']);
+    expect(Cache::get(RefreshManagedRenewal::CACHE_PREFIX.'sub_managed_1'))
+        ->toBe(['renews_at' => $renewsAt, 'amount' => 76464, 'currency' => 'usd']);
 });
 
 it('subscribes the Stripe endpoint to paid invoices', function (): void {
@@ -1756,20 +1761,36 @@ it('stays quiet about an update that does not change the status', function (): v
     expect($workspace->owner->notifications()->count())->toBe(0);
 });
 
-it('refreshes the remembered renewal when a managed subscription updates', function (): void {
+it('remembers the renewal date and the total Stripe will invoice, tax included, when a managed subscription updates', function (): void {
     $workspace = stripeBillingWorkspace();
     $workspace->forceFill(['plan' => Plan::Concierge])->save();
     managedSubscriptionOn($workspace);
 
     $payload = managedSubscriptionEvent($workspace, 'updated');
     $payload['data']['object']['items']['data'][0]['current_period_end'] = 1_800_000_000;
-    $payload['data']['object']['items']['data'][0]['price'] += ['unit_amount' => 70800, 'currency' => 'usd'];
 
-    sendStripeWebhook($payload)->assertSuccessful();
+    sendStripeWebhook($payload, stripeAlsoAnswers: ['POST /v1/invoices/create_preview' => upcomingManagedInvoice(76464)])->assertSuccessful();
 
-    expect(Cache::get(RememberManagedRenewal::CACHE_PREFIX.'sub_managed_1'))
-        ->toBe(['renews_at' => 1_800_000_000, 'amount' => 70800, 'currency' => 'usd']);
+    expect(Cache::get(RefreshManagedRenewal::CACHE_PREFIX.'sub_managed_1'))
+        ->toBe(['renews_at' => 1_800_000_000, 'amount' => 76464, 'currency' => 'usd']);
 });
+
+it('forgets the remembered renewal once Stripe no longer bills the managed subscription', function (): void {
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($workspace);
+    Cache::forever(RefreshManagedRenewal::CACHE_PREFIX.'sub_managed_1', ['renews_at' => 1_800_000_000, 'amount' => 70800, 'currency' => 'usd']);
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'updated', overrides: ['status' => 'unpaid']))->assertSuccessful();
+
+    expect(Cache::get(RefreshManagedRenewal::CACHE_PREFIX.'sub_managed_1'))->toBeNull();
+});
+
+/** @return array<string, mixed> */
+function upcomingManagedInvoice(int $total): array
+{
+    return ['object' => 'invoice', 'total' => $total, 'currency' => 'usd'];
+}
 
 it('remembers no renewal for a Pro subscription update', function (): void {
     $workspace = stripeBillingWorkspace();
@@ -1781,5 +1802,5 @@ it('remembers no renewal for a Pro subscription update', function (): void {
 
     sendStripeWebhook($payload)->assertSuccessful();
 
-    expect(Cache::get(RememberManagedRenewal::CACHE_PREFIX.'sub_test_1'))->toBeNull();
+    expect(Cache::get(RefreshManagedRenewal::CACHE_PREFIX.'sub_test_1'))->toBeNull();
 });

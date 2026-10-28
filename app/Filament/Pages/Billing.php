@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Actions\Billing\CreateCreditPackCheckout;
-use App\Actions\Billing\RememberManagedRenewal;
 use App\Actions\Billing\StartProTrial;
 use App\Enums\BillingStatus;
 use App\Enums\Plan;
 use App\Enums\WorkspaceCapability;
 use App\Features\Billing as BillingFeature;
 use App\Filament\Pages\Concerns\HasWorkspaceSettingsNavigation;
+use App\Jobs\RefreshManagedRenewal;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Billing\CreditPackCatalog;
@@ -204,9 +204,11 @@ final class Billing extends Page
             return null;
         }
 
-        $renewal = Cache::get(RememberManagedRenewal::CACHE_PREFIX.$managedSubscription->stripe_id);
+        $renewal = Cache::get(RefreshManagedRenewal::CACHE_PREFIX.$managedSubscription->stripe_id);
 
         if (! is_array($renewal)) {
+            RefreshManagedRenewal::dispatch($managedSubscription->stripe_id);
+
             return null;
         }
 

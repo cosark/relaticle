@@ -7,6 +7,7 @@ namespace App\Actions\Billing;
 use App\Enums\Plan;
 use App\Enums\StripeSubscriptionStatus;
 use App\Enums\SubscriptionType;
+use App\Jobs\RefreshManagedRenewal;
 use App\Models\Workspace;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,7 +25,6 @@ final readonly class ActivateManagedPlan
     public function __construct(
         private CreditService $credits,
         private CancelWithUnusedTimeRefund $cancelWithRefund,
-        private RememberManagedRenewal $rememberRenewal,
     ) {}
 
     public function execute(Workspace $workspace, string $stripeSubscriptionId, string $invoiceId): void
@@ -92,7 +92,7 @@ final readonly class ActivateManagedPlan
 
         $this->cancelReplaced($workspace, $stripeSubscription->id, $invoiceId);
 
-        $this->rememberRenewal->execute($stripeSubscription->toArray());
+        RefreshManagedRenewal::dispatch($stripeSubscription->id);
     }
 
     private function cancelReplaced(Workspace $workspace, string $activatedId, string $invoiceId): void

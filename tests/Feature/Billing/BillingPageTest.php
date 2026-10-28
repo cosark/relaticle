@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use App\Actions\Billing\RememberManagedRenewal;
 use App\Actions\Billing\StartProTrial;
 use App\Enums\Plan;
 use App\Features\Billing as BillingFeature;
 use App\Filament\Pages\Billing;
+use App\Jobs\RefreshManagedRenewal;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Billing\CreditPackCatalog;
@@ -15,6 +15,7 @@ use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Cashier\Subscription;
 use Laravel\Pennant\Feature;
@@ -30,6 +31,7 @@ mutates(
 );
 
 beforeEach(function (): void {
+    Queue::fake([RefreshManagedRenewal::class]);
     Feature::define(BillingFeature::class, true);
     config()->set('services.stripe.prices.pro_monthly', 'price_pro_monthly_test');
     config()->set('services.stripe.prices.pro_yearly', 'price_pro_yearly_test');
@@ -780,7 +782,7 @@ function managedPageWorkspace(Workspace $workspace, string $status = 'active', P
 
 function cacheManagedRenewalForPage(): void
 {
-    Cache::forever(RememberManagedRenewal::CACHE_PREFIX.'sub_managed_page', [
+    Cache::forever(RefreshManagedRenewal::CACHE_PREFIX.'sub_managed_page', [
         'renews_at' => now()->addMonths(6)->getTimestamp(),
         'amount' => 70800,
         'currency' => 'usd',
@@ -822,13 +824,15 @@ it('shows the managed renewal beside the cancelled Pro subscription it replaced'
         ->assertSee(__('billing.manage.button'));
 });
 
-it('omits the renewal line when nothing is cached', function (): void {
+it('omits the renewal line when nothing is cached and asks Stripe for it in the background', function (): void {
     [, $workspace] = billingPageOwner();
     managedPageWorkspace($workspace);
 
     livewire(Billing::class)
         ->assertDontSee('Renews')
         ->assertSee(__('billing.manage.button'));
+
+    Queue::assertPushed(RefreshManagedRenewal::class, fn (RefreshManagedRenewal $job): bool => $job->stripeSubscriptionId === 'sub_managed_page');
 });
 
 it('warns the owner when the managed invoice is overdue', function (): void {

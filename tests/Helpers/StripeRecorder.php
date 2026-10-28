@@ -109,7 +109,7 @@ final class StripeRecorder implements ClientInterface
             fn (array $request): array => ['method' => $request['method'], 'url' => $request['url']],
             array_filter(
                 array_slice($this->requests, $offset),
-                fn (array $request): bool => $request['method'] !== 'GET',
+                fn (array $request): bool => $request['method'] !== 'GET' && ! str_contains($request['url'], '/v1/invoices/create_preview'),
             ),
         ));
     }

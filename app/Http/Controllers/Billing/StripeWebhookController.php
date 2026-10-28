@@ -7,11 +7,11 @@ namespace App\Http\Controllers\Billing;
 use App\Actions\Billing\ActivateManagedPlan;
 use App\Actions\Billing\GrantPurchasedCredits;
 use App\Actions\Billing\NotifyWorkspaceOfPaymentFailure;
-use App\Actions\Billing\RememberManagedRenewal;
 use App\Actions\Billing\RestoreWorkspaceTrial;
 use App\Actions\Billing\VoidOpenInvoices;
 use App\Enums\StripeSubscriptionStatus;
 use App\Enums\SubscriptionType;
+use App\Jobs\RefreshManagedRenewal;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\ManagedInvoiceOverdueNotification;
@@ -40,7 +40,6 @@ final class StripeWebhookController extends CashierWebhookController
         private readonly GrantPurchasedCredits $grantCredits,
         private readonly NotifyWorkspaceOfPaymentFailure $notifyPaymentFailure,
         private readonly ActivateManagedPlan $activateManagedPlan,
-        private readonly RememberManagedRenewal $rememberManagedRenewal,
         private readonly VoidOpenInvoices $voidOpenInvoices,
     ) {
         parent::__construct();
@@ -129,7 +128,7 @@ final class StripeWebhookController extends CashierWebhookController
             return;
         }
 
-        $this->rememberManagedRenewal->execute($object);
+        RefreshManagedRenewal::dispatch($subscription->stripe_id);
 
         $previousStatus = $payload['data']['previous_attributes']['status'] ?? null;
 
