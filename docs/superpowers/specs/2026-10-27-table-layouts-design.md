@@ -65,6 +65,8 @@ The feature fails, even if every test passes, when:
 | What a layout stores | Columns (visibility, order), sort, filters, search, column searches, grouping, page size, pins | Widths: they stay per member and per table |
 | Auto-save | Yes: the last state persists per member, and saved layouts sit on top | Saved layouts only |
 | Resize | Port the Maxforms implementation | Keep `asmit/resized-column`; reimplement a minimal resizer |
+| Resizer API | A `Table::resizableColumns()` macro, typed for PHPStan by `stubs/Filament.stub` | A static `ResizableColumns::apply($table)` call; a macro silenced by a `phpstan.neon` ignore |
+| Column widths | Every data column has an exact width, and the actions column takes the space left over | Maxforms' elastic columns (see "Why columns are not elastic, for now") |
 | Name | "Layout": Save layout, My layouts, Delete layout. Models `TableLayout` and `TablePreference` | "View": the list, board and cards switcher (`RemembersViewMode`) already owns that word, and `architecture.md` allows one word per concept |
 | Default page size | 25, already set on `main` (`AppPanelProvider::DEFAULT_PAGINATION_PAGE_OPTION`) | 10 |
 
@@ -115,9 +117,13 @@ repository. Its README names each file.
 - `HasResizableColumns` trait to `app/Filament/Tables/Concerns/`. Drop the `TableSetting` model
   and its migration: keep the session write only. Keep the server-side clamp of 40 to 1000 px,
   because the Livewire action accepts any payload.
-- `ResizableColumnsMacro` to `app/Filament/Tables/Macros/`, registered in
-  `AppServiceProvider::boot()`. Keep the fixed and elastic classification: it stops a timestamp
-  column stretching across a wide monitor.
+- The Maxforms macro becomes `ResizableColumns` in `app/Filament/Tables/`. It gives every column
+  its saved width, else its `->width()`, else 180 px, and owns the 40 and 1000 px bounds.
+  `MacroServiceProvider` exposes it as `Table::resizableColumns()`.
+- `stubs/Filament.stub` declares the macro on `Table` and tells PHPStan that `$this` inside a
+  Filament macro is the table. Filament's `macro()` lacks the annotation Laravel's carries.
+  `Table` has a magic `__call()`, so PHPStan accepts any method name on it: the tests catch a
+  misspelled call, not PHPStan.
 - The resize half of `submissions.js` (from the "resizableColumn Alpine component" banner to
   the end, minus the expandable-text wiring) to `resources/js/filament/resizable-columns.js`,
   registered with `FilamentAsset::register()` like `payload-guard.js`. Commit the published copy
@@ -141,8 +147,13 @@ Learned from the spike on `spike/maxforms-resize`:
   inline styles on table cells. Phase 5 depends on this.
 - The ported comments carry em-dashes, which `tests/Arch/ConventionsTest.php` fails, and run
   past the two-line cap. Rewrite them during the port.
-- The macro reads the table's columns, so on pages using `HasCustomFieldColumns` it must run
-  after that trait's `table()`, so that custom field columns are included.
+- `->resizableColumns()` reads the table's columns, so `HasCustomFieldColumns::table()` calls it
+  last, and custom field columns get handles too. A page opts in with `use HasResizableColumns`.
+- The panel scrolls inside `.fi-layout`, not the document. The Maxforms sticky head pinned to the
+  page, so the port pins it to the nearest scrolling ancestor through a named scroll timeline.
+- A width is saved when the drag ends, and the trait re-stamps the columns after saving. A sort
+  sent in the same request otherwise renders the old width.
+- `wire:navigate` replaces the whole body, so the width badge is recreated when it is detached.
 - The resizer reserves a fixed width for row actions, which assumes they are wrapped in an
   `ActionGroup`. Confirm this on all five tables.
 
@@ -153,6 +164,37 @@ Done when:
 - Dropdowns, row menus, the sticky table head and SPA navigation between the five tables work in
   Chromium and WebKit, light and dark.
 - `asmit/resized-column` is gone from `composer.json` and `composer.lock`.
+- A drag changes a column by the width the badge shows, on a narrow screen and on a wide one.
+
+#### Why columns are not elastic, for now
+
+Maxforms split columns in two. A fixed column, such as a timestamp, had an exact width. An
+elastic column had only a `min-width`, and the elastic columns shared the space left over.
+
+That split breaks resizing on a wide screen. The table uses `table-layout: fixed`, and browsers
+ignore `min-width` on table cells in that mode. When the table fits the screen, dragging an
+elastic column changed its saved width and nothing else. The guideline and badge showed, but the
+column did not move. On a narrower screen the table overflows and every column is exact, which
+is why a 1440 px test passed and a real wide monitor failed.
+
+Maxforms carries the same bug, read from its source rather than run. Its submissions table has a
+column per form field, so it nearly always overflows and the bug rarely shows. Our CRM tables
+have five to eight columns and usually fit the screen, so here it showed at once.
+
+Phase 1 therefore gives every data column an exact width. The actions column takes the space
+left over, so the table still reaches the right edge and the row menu stays there. The cost is
+an empty band before the row menu on a wide screen.
+
+Considered and set aside:
+
+| Option | What happens | Why not now |
+|---|---|---|
+| A filler column: one `->grow()` column takes the spare space | The chosen column stretches and every other column stays exact | Dragging the filler itself shows no change while it fills the screen. Tried on Companies, then held back |
+| A resized elastic column turns exact | Untouched elastic columns stretch, and a dragged one keeps the dragged width | More logic in the script, and the other columns visibly shrink while you drag |
+| Spare space shared by every column | Every column stretches in proportion | A column grows by a different amount than the badge shows |
+
+Revisit this when the empty band on wide screens draws complaints. The filler column is the
+smallest next step: `->grow()` on the title column, with the actions column back at 64 px.
 
 ### Phase 2: Remembered table state
 
@@ -479,7 +521,9 @@ Never call `resetTable()`: it re-runs the whole booted block and blanks the filt
 | Path | Holds | Phase |
 |---|---|---|
 | `app/Filament/Tables/Concerns/HasResizableColumns.php` | resize trait | 1 |
-| `app/Filament/Tables/Macros/ResizableColumnsMacro.php` | resize macro | 1 |
+| `app/Filament/Tables/ResizableColumns.php` | gives every column its width and drag handle | 1 |
+| `app/Providers/MacroServiceProvider.php` | registers `Table::resizableColumns()` | 1 |
+| `stubs/Filament.stub` | types the macro and its `$this` for PHPStan | 1 |
 | `resources/js/filament/resizable-columns.js` | resize, then drag, then sticky | 1, 4, 5 |
 | `app/Filament/Tables/Concerns/PersistsTableState.php` | state trait | 2 |
 | `app/Models/TablePreference.php`, `app/Models/TableLayout.php` | models | 2, 3 |
