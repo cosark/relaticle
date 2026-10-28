@@ -47,7 +47,6 @@ use App\Support\BrandColors;
 use App\Support\Impersonation\Impersonator;
 use App\Support\OutlinedIcons;
 use App\Support\SupportForms;
-use Asmit\ResizedColumn\ResizedColumnPlugin;
 use Exception;
 use Filament\Actions\Action;
 use Filament\Actions\Contracts\HasActions;
@@ -529,7 +528,6 @@ final class AppPanelProvider extends PanelProvider
                             && $user->hasWorkspaceCapability(Filament::getTenant()?->getKey(), WorkspaceCapability::FieldsManage);
                     })
                     ->managementPage(CustomFields::class),
-                ResizedColumnPlugin::make(),
                 ActivityLogPlugin::make()
                     ->renderers(array_fill_keys(
                         array_column(AppEventPalette::cases(), 'value'),

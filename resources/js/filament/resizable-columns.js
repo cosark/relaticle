@@ -65,11 +65,26 @@ const stickyHeadersSupported =
 let stickyHeadersWired = false
 let stickyHeadersStyleElement = null
 
-function stickyHeaderOffset() {
-    const topbar = document.querySelector('.fi-topbar-ctn')
-    if (!topbar || !['sticky', 'fixed'].includes(getComputedStyle(topbar).position)) return 0
+const PAGE_SCROLL_TIMELINE = '--resizable-page-scroll'
 
-    return topbar.offsetHeight
+// The panel scrolls inside `.fi-layout` (html and body are overflow hidden), not the document.
+function pageScroller(table) {
+    let node = table.closest('.fi-ta-content-ctn')?.parentElement
+    while (node && node !== document.body) {
+        if (/auto|scroll/.test(getComputedStyle(node).overflowY)) return node
+        node = node.parentElement
+    }
+
+    return null
+}
+
+function pinLine(scrollerTop) {
+    const topbar = document.querySelector('.fi-topbar-ctn')
+    const topbarBottom = topbar && ['sticky', 'fixed'].includes(getComputedStyle(topbar).position)
+        ? topbar.getBoundingClientRect().bottom
+        : 0
+
+    return Math.max(scrollerTop, topbarBottom)
 }
 
 function stickyHeaderStyleElement() {
@@ -86,8 +101,6 @@ function stickyHeaderStyleElement() {
 function measureStickyHeaders() {
     if (!stickyHeadersSupported) return
 
-    const offset = stickyHeaderOffset()
-    const scrollY = window.scrollY
     let css = ''
 
     document.querySelectorAll('table.fi-ta-resizable-table > thead').forEach((thead, index) => {
@@ -100,8 +113,15 @@ function measureStickyHeaders() {
             return
         }
 
-        const tableTop = table.getBoundingClientRect().top + scrollY
-        const start = Math.max(0, tableTop - offset)
+        const scroller = pageScroller(table)
+        const scrollerTop = scroller ? scroller.getBoundingClientRect().top : 0
+        const scrollTop = scroller ? scroller.scrollTop : window.scrollY
+        const tableTop = table.getBoundingClientRect().top - scrollerTop + scrollTop
+        const start = Math.max(0, tableTop - (pinLine(scrollerTop) - scrollerTop))
+
+        if (scroller) {
+            scroller.style.scrollTimeline = `${PAGE_SCROLL_TIMELINE} block`
+        }
 
         thead.dataset.stickyHeader = String(index)
         css +=
@@ -109,7 +129,7 @@ function measureStickyHeaders() {
             `[data-sticky-header="${index}"]{` +
             'will-change:transform;' +
             `animation:pin-header-${index} linear both;` +
-            'animation-timeline:scroll(root block);' +
+            `animation-timeline:${scroller ? PAGE_SCROLL_TIMELINE : 'scroll(root block)'};` +
             `animation-range:${start}px ${start + maxShift}px}`
     })
 

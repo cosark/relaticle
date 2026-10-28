@@ -115,9 +115,10 @@ repository. Its README names each file.
 - `HasResizableColumns` trait to `app/Filament/Tables/Concerns/`. Drop the `TableSetting` model
   and its migration: keep the session write only. Keep the server-side clamp of 40 to 1000 px,
   because the Livewire action accepts any payload.
-- `ResizableColumnsMacro` to `app/Filament/Tables/Macros/`, registered in
-  `AppServiceProvider::boot()`. Keep the fixed and elastic classification: it stops a timestamp
-  column stretching across a wide monitor.
+- The Maxforms macro becomes a plain static `ResizableColumns::apply()` in `app/Filament/Tables/`,
+  because a `Table` macro call fails PHPStan without a new ignore. It owns the 40 and 1000 px
+  bounds as `MIN_WIDTH` and `MAX_WIDTH`: PHP cannot read a trait's constant directly. Keep the
+  fixed and elastic classification: it stops a timestamp column stretching across a wide monitor.
 - The resize half of `submissions.js` (from the "resizableColumn Alpine component" banner to
   the end, minus the expandable-text wiring) to `resources/js/filament/resizable-columns.js`,
   registered with `FilamentAsset::register()` like `payload-guard.js`. Commit the published copy
@@ -141,8 +142,11 @@ Learned from the spike on `spike/maxforms-resize`:
   inline styles on table cells. Phase 5 depends on this.
 - The ported comments carry em-dashes, which `tests/Arch/ConventionsTest.php` fails, and run
   past the two-line cap. Rewrite them during the port.
-- The macro reads the table's columns, so on pages using `HasCustomFieldColumns` it must run
-  after that trait's `table()`, so that custom field columns are included.
+- `ResizableColumns::apply()` reads the table's columns, so `HasCustomFieldColumns::table()` calls it
+  last, and custom field columns get handles too.
+- The panel scrolls inside `.fi-layout`, not the document. The Maxforms sticky head pinned to the
+  root scroller, so the port pins it to the table's nearest scrolling ancestor through a named
+  scroll timeline.
 - The resizer reserves a fixed width for row actions, which assumes they are wrapped in an
   `ActionGroup`. Confirm this on all five tables.
 
@@ -479,7 +483,7 @@ Never call `resetTable()`: it re-runs the whole booted block and blanks the filt
 | Path | Holds | Phase |
 |---|---|---|
 | `app/Filament/Tables/Concerns/HasResizableColumns.php` | resize trait | 1 |
-| `app/Filament/Tables/Macros/ResizableColumnsMacro.php` | resize macro | 1 |
+| `app/Filament/Tables/ResizableColumns.php` | stamps columns with width and sizing mode | 1 |
 | `resources/js/filament/resizable-columns.js` | resize, then drag, then sticky | 1, 4, 5 |
 | `app/Filament/Tables/Concerns/PersistsTableState.php` | state trait | 2 |
 | `app/Models/TablePreference.php`, `app/Models/TableLayout.php` | models | 2, 3 |

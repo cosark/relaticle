@@ -107,3 +107,21 @@ it('keeps resizing after navigating to another table and after sorting', functio
         ->assertScript($oneHandlePerHeader, true)
         ->assertNoJavaScriptErrors();
 });
+
+it('keeps the table head pinned while the page scrolls', function (): void {
+    People::factory()->recycle([$this->user, $this->workspace])->count(30)->create();
+
+    $headOffset = '(() => { const layout = document.querySelector(".fi-layout"); return Math.abs(Math.round(document.querySelector("thead").getBoundingClientRect().top - layout.getBoundingClientRect().top)); })()';
+
+    $page = loginViaBrowser($this->user)
+        ->assertPathIs("/app/{$this->workspace->slug}")
+        ->resize(1440, 700)
+        ->navigate("/app/{$this->workspace->slug}/people")
+        ->assertVisible(headerSelector('name').' .column-resize-handle-bar');
+
+    $page->script('document.querySelector(".fi-layout").scrollTo(0, 600)');
+
+    $page->wait(0.5)
+        ->assertScript($headOffset, 0)
+        ->assertNoJavaScriptErrors();
+});
