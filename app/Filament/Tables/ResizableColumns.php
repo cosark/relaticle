@@ -53,5 +53,8 @@ final class ResizableColumns
         ]);
 
         $column->extraCellAttributes([...$attributes, 'style' => "{$style}; overflow: hidden"]);
+
+        // Filament appends the column's own width after the header style, where the last width wins.
+        $column->width("{$width}px");
     }
 }

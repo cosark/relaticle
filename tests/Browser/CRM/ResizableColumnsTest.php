@@ -214,3 +214,26 @@ it('keeps a dragged width after signing in again', function (): void {
         ->assertScript($savedWidth, (string) ($before + 120))
         ->assertNoJavaScriptErrors();
 });
+
+it('keeps a dragged width on a column that sets its own width, and the actions column gives up the space', function (): void {
+    $actionsWidth = '(() => Math.round(document.querySelector("th.fi-ta-actions-header-cell").getBoundingClientRect().width))()';
+
+    $page = loginViaBrowser($this->user)
+        ->assertPathIs("/app/{$this->workspace->slug}")
+        ->resize(1920, 900)
+        ->navigate("/app/{$this->workspace->slug}/people")
+        ->assertVisible(headerSelector('custom_fields.emails').' .column-resize-handle-bar');
+
+    $before = $page->script(headerWidth('custom_fields.emails'));
+    $actionsBefore = $page->script($actionsWidth);
+
+    $page->script(dragColumnEdge('custom_fields.emails', 100));
+    $page->wait(1)
+        ->assertScript(headerWidth('custom_fields.emails'), $before + 100)
+        ->assertScript($actionsWidth, $actionsBefore - 100)
+        ->refresh()
+        ->assertVisible(headerSelector('custom_fields.emails').' .column-resize-handle-bar')
+        ->assertScript(headerWidth('custom_fields.emails'), $before + 100)
+        ->assertScript($actionsWidth, $actionsBefore - 100)
+        ->assertNoJavaScriptErrors();
+});
