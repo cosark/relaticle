@@ -32,8 +32,10 @@ and switch between them, and no way to share one with the workspace.
 
 ## Non-goals
 
-- Relation managers, the activity log, import history, the Livewire settings tables and the
-  SystemAdmin panel. They keep Filament's default behaviour.
+- Remembered state, layouts, pins or resizing for relation managers, the activity log, import
+  history, the Livewire settings tables and the SystemAdmin panel. The app panel's tables keep no
+  table state in the session from phase 2 on, so they reset on each page load. The SystemAdmin
+  panel keeps Filament's default behaviour.
 - A workspace-wide default layout that an Admin forces on every member.
 - Pinning to the right edge.
 - Widths that change with the active layout. Widths stay per member and per table.
@@ -203,15 +205,16 @@ back on their next visit on any device. No new UI. Only column state and page si
 today, and only within a session; the rest is new.
 
 - Turn off Filament's session persistence for table state with `persistInSession(false)` in
-  `AppPanelProvider`, scoped to the app panel (see Filament internals). The database becomes the
-  only store.
+  `AppPanelProvider`, on every app panel table (see Filament internals). The database becomes the
+  only store for the five pages, and the other app panel tables remember nothing.
 - Add `table_preferences` and `TableStateData` (see Domain model).
-- Add the `PersistsTableState` trait to the five pages:
+- Add the `PersistsTableState` trait to the five pages, through `HasCustomFieldColumns`:
   1. `loadTableColumnsFromSession()`: return the stored column state, else the default.
   2. `mountInteractsWithTable()`: call the parent, then seed sort, filters, search, column
      searches, grouping and page size from the row. Each is guarded on `blank()`, so a shared
      URL wins over saved state.
-  3. `dehydrate()`: hash the current state, compare it with the hash taken at boot, and persist
+  3. `dehydrate()`: hash the current state, compare it with the hash recorded at the end of the
+     previous request (the first request records it without writing), and persist
      through `SaveTablePreference` when it changed. One writer, one write per request.
 - Widths move from the session to the row. The phase 1 width action keeps its clamp and only
   assigns the property; the dehydrate sync persists it. `#[Renderless]` skips rendering, not
