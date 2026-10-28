@@ -9,7 +9,7 @@ use Spatie\LaravelData\Data;
 final class TableStateData extends Data
 {
     /**
-     * @param  list<array{type: string, name: string, isToggled: bool}>  $columns
+     * @param  list<array{type?: string, name?: string, isToggled?: bool}>  $columns
      * @param  array<string, mixed>  $filters
      * @param  array<string, mixed>  $columnSearches
      * @param  array<string, int>  $widths

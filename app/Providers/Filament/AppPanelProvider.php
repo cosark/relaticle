@@ -232,8 +232,8 @@ final class AppPanelProvider extends PanelProvider
     /** @return list<int> */
     private function paginationPageOptions(HasTable $livewire): array
     {
-        $onePage = (int) $livewire->getTable()->getDefaultPaginationPageOption();
-        $pageOptions = [$onePage, $onePage * 2, $onePage * 4];
+        $pageOptions = self::pageSizeOptions($livewire->getTable());
+        $onePage = $pageOptions[0];
 
         // Mount reads these before any query runs; afterwards the count comes from the
         // already-fetched paginator, and a single option is what hides the select.
@@ -246,6 +246,14 @@ final class AppPanelProvider extends PanelProvider
         }
 
         return [$onePage];
+    }
+
+    /** @return list<int> */
+    public static function pageSizeOptions(Table $table): array
+    {
+        $onePage = (int) $table->getDefaultPaginationPageOption();
+
+        return [$onePage, $onePage * 2, $onePage * 4];
     }
 
     /**

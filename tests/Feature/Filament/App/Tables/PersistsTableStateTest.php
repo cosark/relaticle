@@ -170,6 +170,22 @@ it('heals a state naming a column the table no longer has', function (): void {
         ->and($component->get('tableSort'))->toBeNull();
 });
 
+it('opens a table whose saved columns are missing a name or a visibility', function (): void {
+    TablePreference::factory()->for($this->user)->for($this->user->currentWorkspace)->create([
+        'entity' => CrmEntity::Company,
+        'state' => new TableStateData(columns: [
+            ['type' => 'column', 'name' => 'created_at', 'isToggled' => false],
+            ['type' => 'column', 'isToggled' => false],
+            ['type' => 'column', 'name' => 'creator.name'],
+        ]),
+    ]);
+
+    $columns = collect(livewire(ListCompanies::class)->assertOk()->get('tableColumns'))->keyBy('name');
+
+    expect($columns['created_at']['isToggled'])->toBeFalse()
+        ->and($columns['creator.name']['isToggled'])->toBeTrue();
+});
+
 it('loads a filter saved for a deleted custom field', function (): void {
     TablePreference::factory()->for($this->user)->for($this->user->currentWorkspace)->create([
         'entity' => CrmEntity::Company,

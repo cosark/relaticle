@@ -28,10 +28,15 @@ final class ResizableColumns
         $widths = $livewire->getResizableColumnWidths();
 
         foreach ($table->getColumns() as $name => $column) {
-            self::stamp($column, $name, (int) ($widths[$name] ?? $column->getWidth() ?? self::DEFAULT_COLUMN_WIDTH));
+            self::stamp($column, $name, $widths[$name] ?? self::pixels($column->getWidth()) ?? self::DEFAULT_COLUMN_WIDTH);
         }
 
         return $table;
+    }
+
+    private static function pixels(string|int|null $width): ?int
+    {
+        return preg_match('/^(\d+)(px)?$/', (string) $width, $match) === 1 ? (int) $match[1] : null;
     }
 
     private static function stamp(Column $column, string $name, int $width): void

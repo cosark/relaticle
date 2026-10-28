@@ -133,3 +133,23 @@ it('renders a saved width over a width the column sets itself', function (): voi
 
     expect($match[1])->toContain('width: 500px')->not->toContain("width: {$column->getWidth()}");
 });
+
+it('uses the default width for a column whose own width is not in pixels', function (string $width): void {
+    $component = livewire(ListCompanies::class);
+    $table = $component->instance()->getTable();
+    $table->getColumn('created_at')->width($width);
+
+    $table->resizableColumns();
+
+    expect(headerAttributes($component, 'created_at')['data-resizable-width'])->toBe('180');
+})->with(['10rem', '50%']);
+
+it('keeps a pixel width the column sets itself', function (string $width): void {
+    $component = livewire(ListCompanies::class);
+    $table = $component->instance()->getTable();
+    $table->getColumn('created_at')->width($width);
+
+    $table->resizableColumns();
+
+    expect(headerAttributes($component, 'created_at')['data-resizable-width'])->toBe('240');
+})->with(['240px', '240']);

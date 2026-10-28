@@ -11,6 +11,7 @@ use App\Models\Scopes\WorkspaceScope;
 use App\Models\TablePreference;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Providers\Filament\AppPanelProvider;
 use Filament\Facades\Filament;
 use Livewire\Attributes\Locked;
 use LogicException;
@@ -49,7 +50,7 @@ trait PersistsTableState
             $this->tableSort = null;
         }
 
-        if ($table->isPaginated() && ! in_array($this->tableRecordsPerPage, $this->offeredPageSizes())) {
+        if ($table->isPaginated() && ! in_array($this->tableRecordsPerPage, AppPanelProvider::pageSizeOptions($table))) {
             $this->tableRecordsPerPage = $this->getDefaultTableRecordsPerPageSelectOption();
         }
     }
@@ -87,25 +88,14 @@ trait PersistsTableState
         $columns = [];
 
         foreach ($stored as $item) {
-            if (isset($byName[$item['name']])) {
-                $columns[] = [...$byName[$item['name']], 'isToggled' => $item['isToggled']];
+            $name = $item['name'] ?? null;
+
+            if ($name !== null && isset($byName[$name])) {
+                $columns[] = [...$byName[$name], 'isToggled' => $item['isToggled'] ?? true];
             }
         }
 
         return $columns;
-    }
-
-    /**
-     * @return array<int, int|string>
-     */
-    private function offeredPageSizes(): array
-    {
-        $chosen = $this->tableRecordsPerPage;
-        $this->tableRecordsPerPage = null; // the panel narrows the options to the filtered row count once a size is chosen
-        $options = $this->getTable()->getPaginationPageOptions();
-        $this->tableRecordsPerPage = $chosen;
-
-        return $options;
     }
 
     private function tableEntity(): CrmEntity
@@ -123,7 +113,7 @@ trait PersistsTableState
             ->where('workspace_id', Filament::getTenant()->getKey())
             ->whereBelongsTo(auth()->user())
             ->where('entity', $this->tableEntity())
-            ->firstOrNew()
+            ->first()
             ->state ?? new TableStateData;
     }
 
