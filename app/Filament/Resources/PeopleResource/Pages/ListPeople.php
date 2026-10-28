@@ -7,8 +7,6 @@ namespace App\Filament\Resources\PeopleResource\Pages;
 use App\Filament\Concerns\HasCustomFieldColumns;
 use App\Filament\Exports\PeopleExporter;
 use App\Filament\Resources\PeopleResource;
-use App\Filament\Tables\Concerns\HasResizableColumns;
-use App\Filament\Tables\Concerns\PersistsTableState;
 use App\Models\People;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -23,8 +21,6 @@ use Relaticle\ImportWizard\Filament\Pages\ImportPeople;
 final class ListPeople extends ListRecords
 {
     use HasCustomFieldColumns;
-    use HasResizableColumns;
-    use PersistsTableState;
 
     protected static string $resource = PeopleResource::class;
 
