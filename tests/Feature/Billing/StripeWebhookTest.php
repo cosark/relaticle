@@ -77,6 +77,10 @@ function sendStripeWebhook(array $payload, string $secret = 'whsec_test_secret',
         StripeRecorder::install()->respondTo("/v1/subscriptions/{$subscription['id']}", $subscription);
     }
 
+    if (($payload['type'] ?? null) === 'customer.subscription.deleted' && ! StripeRecorder::current() instanceof StripeRecorder) {
+        StripeRecorder::install();
+    }
+
     $body = json_encode($payload, JSON_THROW_ON_ERROR);
     $timestamp = time();
     $signature = hash_hmac('sha256', "{$timestamp}.{$body}", $secret);
@@ -1506,6 +1510,36 @@ function managedSubscriptionEvent(Workspace $workspace, string $event, Plan $pla
 
     return $payload;
 }
+
+it('voids the open invoice of a managed subscription Stripe cancels, so it can no longer be paid', function (): void {
+    Mail::fake();
+    $workspace = stripeBillingWorkspace();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+    managedSubscriptionOn($workspace);
+    $stripe = StripeRecorder::install()
+        ->respondTo('GET /v1/invoices', ['object' => 'list', 'has_more' => false, 'data' => [['id' => 'in_renewal', 'object' => 'invoice', 'status' => 'open']]]);
+
+    sendStripeWebhook(managedSubscriptionEvent($workspace, 'deleted', overrides: [
+        'status' => 'canceled',
+        'ended_at' => now()->getTimestamp(),
+    ]))->assertSuccessful();
+
+    expect($stripe->countFor('POST /v1/invoices/in_renewal/void'))->toBe(1)
+        ->and($workspace->refresh()->plan)->toBe(Plan::Free);
+});
+
+it('reports a renewal paid on a managed subscription that already ended', function (): void {
+    Exceptions::fake();
+    $workspace = stripeBillingWorkspace();
+    managedSubscriptionOn($workspace, status: 'canceled')->forceFill(['ends_at' => now()->subDay()])->save();
+
+    sendStripeWebhook(invoicePaidEvent($workspace, ['id' => 'in_late_renewal', 'billing_reason' => 'subscription_cycle']))->assertOk();
+
+    Exceptions::assertReported(fn (UnexpectedValueException $exception): bool => str_contains($exception->getMessage(), 'in_late_renewal')
+        && str_contains($exception->getMessage(), 'sub_managed_1')
+        && str_contains($exception->getMessage(), (string) $workspace->getKey()));
+    expect($workspace->refresh()->plan)->toBe(Plan::Free);
+});
 
 it('drops a lapsed Concierge workspace to Free and tells the owner', function (): void {
     Mail::fake();

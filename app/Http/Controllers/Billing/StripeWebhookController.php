@@ -9,6 +9,7 @@ use App\Actions\Billing\GrantPurchasedCredits;
 use App\Actions\Billing\NotifyWorkspaceOfPaymentFailure;
 use App\Actions\Billing\RememberManagedRenewal;
 use App\Actions\Billing\RestoreWorkspaceTrial;
+use App\Actions\Billing\VoidOpenInvoices;
 use App\Enums\StripeSubscriptionStatus;
 use App\Enums\SubscriptionType;
 use App\Models\User;
@@ -40,6 +41,7 @@ final class StripeWebhookController extends CashierWebhookController
         private readonly NotifyWorkspaceOfPaymentFailure $notifyPaymentFailure,
         private readonly ActivateManagedPlan $activateManagedPlan,
         private readonly RememberManagedRenewal $rememberManagedRenewal,
+        private readonly VoidOpenInvoices $voidOpenInvoices,
     ) {
         parent::__construct();
     }
@@ -72,6 +74,23 @@ final class StripeWebhookController extends CashierWebhookController
 
         if ($workspace instanceof Workspace && $trialEndsAt !== null) {
             $this->restoreTrial->execute($workspace, $trialEndsAt);
+        }
+
+        return $response;
+    }
+
+    /** @param  array<string, mixed>  $payload */
+    protected function handleCustomerSubscriptionDeleted(array $payload): Response
+    {
+        $response = parent::handleCustomerSubscriptionDeleted($payload);
+
+        $stripeId = $payload['data']['object']['id'] ?? null;
+        $subscription = is_string($stripeId)
+            ? Subscription::query()->where('stripe_id', $stripeId)->whereIn('type', SubscriptionType::managed())->first()
+            : null;
+
+        if ($subscription instanceof Subscription) {
+            $this->voidOpenInvoices->execute($subscription);
         }
 
         return $response;
@@ -192,7 +211,7 @@ final class StripeWebhookController extends CashierWebhookController
         $invoice = $payload['data']['object'] ?? [];
         $stripeSubscriptionId = $invoice['parent']['subscription_details']['subscription'] ?? null;
 
-        if (($invoice['billing_reason'] ?? null) !== Invoice::BILLING_REASON_SUBSCRIPTION_CREATE || ! is_string($stripeSubscriptionId)) {
+        if (! is_string($stripeSubscriptionId)) {
             return $this->successMethod();
         }
 
@@ -200,6 +219,17 @@ final class StripeWebhookController extends CashierWebhookController
             ->where('stripe_id', $stripeSubscriptionId)
             ->whereIn('type', SubscriptionType::managed())
             ->first();
+
+        if ($subscription?->ended() === true) {
+            $this->reportPaidAfterEnd($subscription, $invoice['id'] ?? null);
+
+            return $this->successMethod();
+        }
+
+        if (($invoice['billing_reason'] ?? null) !== Invoice::BILLING_REASON_SUBSCRIPTION_CREATE) {
+            return $this->successMethod();
+        }
+
         $workspace = $subscription?->owner()->first();
 
         if (! $workspace instanceof Workspace) {
@@ -227,6 +257,21 @@ final class StripeWebhookController extends CashierWebhookController
         $this->activateManagedPlan->execute($workspace, $stripeSubscriptionId, $invoiceId);
 
         return $this->successMethod();
+    }
+
+    private function reportPaidAfterEnd(Subscription $subscription, mixed $invoiceId): void
+    {
+        $workspaceId = $subscription->getAttribute($subscription->owner()->getForeignKeyName());
+
+        Log::warning('Managed invoice paid after its subscription ended', [
+            'workspace_id' => $workspaceId,
+            'subscription_id' => $subscription->stripe_id,
+            'invoice_id' => $invoiceId,
+        ]);
+
+        report(new UnexpectedValueException(
+            "Invoice {$invoiceId} was paid on managed subscription {$subscription->stripe_id} of workspace {$workspaceId} after it ended; nothing was granted.",
+        ));
     }
 
     /**

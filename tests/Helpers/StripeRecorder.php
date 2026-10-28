@@ -23,11 +23,14 @@ final class StripeRecorder implements ClientInterface
     /** @var array<string, array{body: array<string, mixed>, status: int}> */
     private array $responses = [];
 
+    private static ?self $current = null;
+
     public static function install(): self
     {
         $recorder = new self;
 
         ApiRequestor::setHttpClient($recorder);
+        self::$current = $recorder;
 
         return $recorder;
     }
@@ -44,6 +47,12 @@ final class StripeRecorder implements ClientInterface
     public static function uninstall(): void
     {
         ApiRequestor::setHttpClient(null);
+        self::$current = null;
+    }
+
+    public static function current(): ?self
+    {
+        return self::$current;
     }
 
     /**
@@ -62,6 +71,7 @@ final class StripeRecorder implements ClientInterface
         }
 
         $body = match (true) {
+            strtoupper((string) $method) === 'GET' && preg_match('#/v1/invoices(\?|$)#', (string) $absUrl) === 1 => ['object' => 'list', 'has_more' => false, 'data' => []],
             str_contains((string) $absUrl, '/checkout/sessions') => [
                 'id' => 'cs_test_fake',
                 'object' => 'checkout.session',
