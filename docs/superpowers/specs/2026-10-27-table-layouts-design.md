@@ -57,7 +57,7 @@ The feature fails, even if every test passes, when:
 
 | Decision | Chosen | Rejected |
 |---|---|---|
-| Delivery | Five phases, one PR each, stacked branches | One PR with three commits (#944) |
+| Delivery | Five phases, one PR each, each branched from `main` after the phase it needs has merged | One PR with three commits (#944); stacked branches |
 | Where the code lives | `app/`, in the folders listed under Code layout | A `packages/` module: the feature has no panel, routes or lifecycle of its own, and every part depends on `App` models and enums |
 | Row key | `entity`, a `CrmEntity` value | The list page class name (#944): a class rename would orphan every saved row |
 | Layouts control placement | Table toolbar, left of search | Page header beside Import / Export (#944's default) |
@@ -87,8 +87,8 @@ action class to satisfy `EloquentWriteOutsideActionRule`.
 ## Phases
 
 Phases 1 to 3 are what #943 promises. Phases 4 and 5 are in scope and follow them. Each phase
-is one PR on its own branch, branched from the previous phase's branch, and each one is
-shippable on its own.
+is one PR against `main`. A phase branches from `main` only once every phase in its Needs column
+has merged, so no PR is stacked on another. Each one is shippable on its own.
 
 | Phase | Ships | Needs |
 |---|---|---|
