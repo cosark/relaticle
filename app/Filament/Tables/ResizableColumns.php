@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Tables;
 
-use App\Filament\Tables\Concerns\HasResizableColumns;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
@@ -28,7 +27,7 @@ final class ResizableColumns
     {
         $livewire = $table->getLivewire();
 
-        if (! in_array(HasResizableColumns::class, class_uses_recursive($livewire), true)) {
+        if (! method_exists($livewire, 'getResizableColumnWidths')) {
             return $table;
         }
 
