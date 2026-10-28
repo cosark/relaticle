@@ -5,16 +5,21 @@ declare(strict_types=1);
 namespace App\Filament\Tables\Concerns;
 
 use App\Filament\Tables\ResizableColumns;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Renderless;
 
 trait HasResizableColumns
 {
+    /** @var array<string, int> */
+    #[Locked]
+    public array $tableColumnWidths = [];
+
     /**
-     * @return array<string, array{width: string}>
+     * @return array<string, int>
      */
     public function getResizableColumnWidths(): array
     {
-        return session($this->resizableColumnsSessionKey(), []);
+        return $this->tableColumnWidths;
     }
 
     #[Renderless]
@@ -28,17 +33,9 @@ trait HasResizableColumns
 
         $width = max(ResizableColumns::MIN_WIDTH, min(ResizableColumns::MAX_WIDTH, $width));
 
-        session()->put($this->resizableColumnsSessionKey(), [
-            ...$this->getResizableColumnWidths(),
-            $columnName => ['width' => (string) $width],
-        ]);
+        $this->tableColumnWidths[$columnName] = $width;
 
         // The columns were stamped at boot, and a sort in the same request renders them.
         $this->getTable()->resizableColumns();
-    }
-
-    private function resizableColumnsSessionKey(): string
-    {
-        return 'tables.resizable.'.hash('xxh128', static::class);
     }
 }

@@ -33,6 +33,7 @@ trait PersistsTableState
         $this->tableColumnSearches = blank($this->tableColumnSearches) ? $stored->columnSearches : $this->tableColumnSearches;
         $this->tableGrouping = blank($this->tableGrouping) ? $stored->grouping : $this->tableGrouping;
         $this->tableRecordsPerPage = blank($this->tableRecordsPerPage) ? $stored->perPage : $this->tableRecordsPerPage;
+        $this->tableColumnWidths = $stored->widths;
     }
 
     public function bootedInteractsWithTable(): void
@@ -40,6 +41,8 @@ trait PersistsTableState
         parent::bootedInteractsWithTable();
 
         $table = $this->getTable();
+
+        $this->tableColumnWidths = array_intersect_key($this->tableColumnWidths, $table->getColumns());
 
         if (filled($this->tableSort) && ! array_key_exists(explode(':', $this->tableSort)[0], $table->getColumns())) {
             $this->tableSort = null;
@@ -138,6 +141,7 @@ trait PersistsTableState
             columnSearches: array_filter($this->tableColumnSearches, filled(...)),
             grouping: filled($this->tableGrouping) ? $this->tableGrouping : null,
             perPage: $this->tableRecordsPerPage,
+            widths: array_intersect_key($this->tableColumnWidths, $this->getTable()->getColumns()),
         );
     }
 }

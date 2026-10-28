@@ -183,3 +183,25 @@ it('leaves relation managers on session persistence', function (): void {
     expect($table->persistsColumnsInSession())->toBeTrue()
         ->and($table->persistsSortInSession())->toBeFalse();
 });
+
+it('brings back a width on a new visit', function (string $page): void {
+    livewire($page)->call('updateResizableColumnWidth', 'created_at', '300');
+    session()->flush();
+
+    expect(livewire($page)->instance()->getResizableColumnWidths())->toBe(['created_at' => 300]);
+})->with('remembered list pages');
+
+it('saves a width in the same request that resizes it', function (): void {
+    livewire(ListCompanies::class)->call('updateResizableColumnWidth', 'created_at', '300');
+
+    expect(TablePreference::query()->withoutGlobalScopes()->first()->state->widths)->toBe(['created_at' => 300]);
+});
+
+it('drops a saved width for a column the table no longer has', function (): void {
+    TablePreference::factory()->for($this->user)->for($this->user->currentWorkspace)->create([
+        'entity' => CrmEntity::Company,
+        'state' => new TableStateData(widths: ['gone' => 300, 'created_at' => 250]),
+    ]);
+
+    expect(livewire(ListCompanies::class)->instance()->getResizableColumnWidths())->toBe(['created_at' => 250]);
+});

@@ -71,23 +71,24 @@ it('gives a column an exact default width', function (string $page): void {
         ->and($attributes['style'])->toBe('min-width: 180px; width: 180px; max-width: 180px');
 })->with('list pages');
 
-it('keeps a width for the session', function (string $page): void {
+it('keeps a width across visits', function (string $page): void {
     livewire($page)->call('updateResizableColumnWidth', 'created_at', '300');
+    session()->flush();
 
     $component = livewire($page);
 
-    expect($component->instance()->getResizableColumnWidths())->toBe(['created_at' => ['width' => '300']])
+    expect($component->instance()->getResizableColumnWidths())->toBe(['created_at' => 300])
         ->and(headerAttributes($component, 'created_at')['data-resizable-width'])->toBe('300');
 })->with('list pages');
 
-it('clamps a width to the allowed range', function (string $sent, string $stored): void {
+it('clamps a width to the allowed range', function (string $sent, int $stored): void {
     livewire(ListCompanies::class)->call('updateResizableColumnWidth', 'created_at', $sent);
 
     expect(livewire(ListCompanies::class)->instance()->getResizableColumnWidths())
-        ->toBe(['created_at' => ['width' => $stored]]);
+        ->toBe(['created_at' => $stored]);
 })->with([
-    'below the minimum' => ['5', '40'],
-    'above the maximum' => ['99999', '1000'],
+    'below the minimum' => ['5', 40],
+    'above the maximum' => ['99999', 1000],
 ]);
 
 it('ignores a width that is not a positive number', function (string $sent): void {
