@@ -202,6 +202,8 @@ it('keeps a dragged width after signing in again', function (): void {
     $page->script("document.querySelector('form[action$=\"/logout\"]').submit()");
 
     $page->assertPathIs('/app/login')
+        ->navigate('/app/login')
+        ->assertScript('!! (window.Livewire && window.Livewire.all().length > 0)', true)
         ->assertScript(asyncAlpineComponentsLoaded());
 
     loginViaBrowser($this->user, page: $page)
