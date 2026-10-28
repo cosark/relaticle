@@ -1,5 +1,5 @@
-// Ported from Maxforms (de1c8eeb9). Each header rendered by ResizableColumns::apply()
-// runs one `resizableColumn` instance, which owns its drag handle.
+// Each header rendered by ResizableColumns::apply() runs one `resizableColumn` instance,
+// which owns its drag handle.
 
 // Every data column carries an exact width. Under `table-layout: fixed` the actions column,
 // which has only a floor, takes whatever space is left so the table still fills its wrapper.
@@ -284,6 +284,8 @@ function ensureGlobalMorphHook() {
 function createHandleBar() {
     const handle = document.createElement('button')
     handle.type = 'button'
+    // Mouse-only for now, so it stays out of the tab order.
+    handle.tabIndex = -1
     handle.classList.add('column-resize-handle-bar')
     handle.setAttribute('aria-label', window.filamentData?.resizeColumnLabel ?? '')
     handle.title = window.filamentData?.resizeColumnHint ?? ''
@@ -312,7 +314,6 @@ function registerResizableColumn() {
     window.Alpine.data('resizableColumn', (columnName, columnId, min = 40, max = 1000) => ({
         minWidth: min,
         maxWidth: max,
-        debounceMs: 400,
         tableSelector: '.fi-ta-table',
         tableWrapperSelector: '.fi-ta-content-ctn',
         // Relationship columns keep the dot in Filament's cell class (`user.name`).
@@ -321,7 +322,6 @@ function registerResizableColumn() {
         table: null,
         tableWrapper: null,
         handleBar: null,
-        saveTimer: null,
 
         init() {
             this.column = this.$el
@@ -402,7 +402,7 @@ function registerResizableColumn() {
                 document.body.classList.remove('resizing-column')
                 hideDragOverlay()
                 if (currentWidth !== startColumnWidth) {
-                    this.scheduleSave(currentWidth)
+                    this.saveWidth(currentWidth)
                 }
                 document.removeEventListener('mousemove', onMove)
                 document.removeEventListener('mouseup', onUp)
@@ -425,13 +425,9 @@ function registerResizableColumn() {
             scheduleSizingUpdate(this.table)
         },
 
-        scheduleSave(width) {
-            clearTimeout(this.saveTimer)
-            this.saveTimer = setTimeout(() => {
-                if (this.$wire && typeof this.$wire.updateResizableColumnWidth === 'function') {
-                    this.$wire.updateResizableColumnWidth(columnName, String(width))
-                }
-            }, this.debounceMs)
+        // Saved on release, not after a delay: a sort sent before the save re-renders the old width.
+        saveWidth(width) {
+            this.$wire.updateResizableColumnWidth(columnName, String(width))
         },
 
         // `table-layout: fixed` never sizes a column to its content, so the widest visible
@@ -440,7 +436,7 @@ function registerResizableColumn() {
             const width = this.measureContentWidth()
             if (!width) return
             this.applyWidth(width)
-            this.scheduleSave(width)
+            this.saveWidth(width)
         },
 
         measureContentWidth() {

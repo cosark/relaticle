@@ -73,6 +73,8 @@ it('resizes a column by dragging its edge and keeps the width after a reload', f
         ->navigate("/app/{$this->workspace->slug}/companies")
         ->assertVisible(headerSelector('created_at').' .column-resize-handle-bar');
 
+    $page->assertScript('document.querySelector(".column-resize-handle-bar").tabIndex', -1);
+
     $before = $page->script(headerWidth('created_at'));
 
     $page->script(dragColumnEdge('created_at', 120));
@@ -162,5 +164,22 @@ it('resizes a column by the dragged amount when the table is narrower than the s
 
     $page->script(dragColumnEdge('accountOwner.name', -60));
     $page->assertScript(headerWidth('accountOwner.name'), $before + 60)
+        ->assertNoJavaScriptErrors();
+});
+
+it('keeps a width when the table is sorted straight after the drag', function (): void {
+    $page = loginViaBrowser($this->user)
+        ->assertPathIs("/app/{$this->workspace->slug}")
+        ->resize(1440, 900)
+        ->navigate("/app/{$this->workspace->slug}/companies")
+        ->assertVisible(headerSelector('created_at').' .column-resize-handle-bar');
+
+    $before = $page->script(headerWidth('created_at'));
+
+    $page->script(dragColumnEdge('created_at', 120));
+    $page->script(sprintf('document.querySelector(`%s .fi-ta-header-cell-sort-btn`).click()', headerSelector('name')));
+
+    $page->wait(1.5)
+        ->assertScript(headerWidth('created_at'), $before + 120)
         ->assertNoJavaScriptErrors();
 });

@@ -62,7 +62,6 @@ it('marks every column resizable', function (string $page): void {
     foreach (array_keys($component->instance()->getTable()->getColumns()) as $column) {
         expect(headerAttributes($component, $column)['x-data'])->toStartWith("resizableColumn('{$column}'");
     }
-
 })->with('list pages');
 
 it('gives a column an exact default width', function (string $page): void {

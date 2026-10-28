@@ -32,6 +32,9 @@ trait HasResizableColumns
             ...$this->getResizableColumnWidths(),
             $columnName => ['width' => (string) $width],
         ]);
+
+        // The columns were stamped at boot, and a sort in the same request renders them.
+        ResizableColumns::apply($this->getTable());
     }
 
     private function resizableColumnsSessionKey(): string

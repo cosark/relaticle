@@ -6,6 +6,7 @@ namespace App\Filament\Tables;
 
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Table;
+use Illuminate\Support\Js;
 use Illuminate\Support\Str;
 
 final class ResizableColumns
@@ -46,7 +47,7 @@ final class ResizableColumns
 
         $column->extraHeaderAttributes([
             ...$attributes,
-            'x-data' => "resizableColumn('{$name}', '{$columnId}', {$min}, {$max})",
+            'x-data' => 'resizableColumn('.Js::from($name).', '.Js::from($columnId).", {$min}, {$max})",
             'class' => 'fi-ta-resizable-header',
             'style' => $style,
         ]);

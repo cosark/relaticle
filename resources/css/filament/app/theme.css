@@ -1975,7 +1975,7 @@ html.fi:has(body.fi-onboarding-wizard),
     @apply shrink-0 text-gray-500 dark:text-gray-400;
 }
 
-/* Resizable table columns (resources/js/filament/resizable-columns.js), ported from Maxforms. */
+/* Resizable table columns, driven by resources/js/filament/resizable-columns.js. */
 .fi-ta-resizable-table thead th[x-data^="resizableColumn"],
 .fi-ta-resizable-header {
     position: relative;
