@@ -29,6 +29,7 @@
         };
 
         [$statusLabel, $statusClasses] = match (true) {
+            $managedPastDue => [__('billing.status.past_due'), 'bg-danger-50 text-danger-700 dark:bg-danger-400/10 dark:text-danger-400'],
             $isManaged => [__('billing.status.managed'), 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'],
             $pastDue => [__('billing.status.past_due'), 'bg-danger-50 text-danger-700 dark:bg-danger-400/10 dark:text-danger-400'],
             $onGrace => [__('billing.status.canceling'), 'bg-warning-50 text-warning-700 dark:bg-warning-400/10 dark:text-warning-400'],
@@ -81,7 +82,7 @@
 
                             <p class="mt-1.5 text-sm text-gray-500 dark:text-gray-400">
                                 @if($showsManagedCard)
-                                    {{ __('billing.managed.tagline') }}
+                                    {{ $managedSubscription && $canManageBilling ? __('billing.managed.tagline_portal') : __('billing.managed.tagline') }}
                                 @elseif($onTrial)
                                     {{ __('billing.trial.active_title') }} ({{ trans_choice('billing.trial.days_left', $trialDaysLeft, ['days' => $trialDaysLeft]) }})
                                 @elseif($onGrace)
@@ -149,7 +150,7 @@
             </div>
         </section>
 
-        @if($pastDue)
+        @if($pastDue && ! $managedPastDue)
             <div class="rounded-2xl border border-danger-200 bg-danger-50 p-5 dark:border-danger-400/20 dark:bg-danger-400/[0.06]">
                 <div class="flex gap-3">
                     <x-ri-error-warning-fill class="mt-0.5 h-5 w-5 shrink-0 text-danger-500 dark:text-danger-400" />
@@ -173,6 +174,9 @@
                     <div class="flex-1">
                         <h3 class="text-sm font-semibold text-danger-800 dark:text-danger-300">{{ __('billing.managed.overdue_title', ['plan' => $workspace->plan->marketingLabel()]) }}</h3>
                         <p class="mt-0.5 text-sm text-danger-700/80 dark:text-danger-400/70">{{ __('billing.managed.overdue_body', ['button' => __('billing.manage.button')]) }}</p>
+                        <div class="mt-3">
+                            <x-filament::button color="danger" wire:click="managePortal">{{ __('billing.manage.button') }}</x-filament::button>
+                        </div>
                     </div>
                 </div>
             </div>

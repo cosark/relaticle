@@ -412,6 +412,12 @@ final class Workspace extends Model implements HasAvatar, HasMedia, Onboardable
             );
     }
 
+    /** @return HasMany<Subscription, $this> */
+    public function managedSubscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class, $this->getForeignKey())->where('type', SubscriptionType::Managed->value);
+    }
+
     public function managedSubscription(): ?Subscription
     {
         return $this->ownedSubscriptions()

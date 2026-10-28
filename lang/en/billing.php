@@ -167,6 +167,7 @@ return [
     'managed' => [
         'title' => 'Your plan is managed by Relaticle',
         'tagline' => 'Contact us for plan and billing changes.',
+        'tagline_portal' => 'Contact us for plan changes. Pay invoices from Manage subscription.',
         'previous_subscription_canceling' => 'Your previous subscription ends on :date. Your current plan is unchanged.',
         'previous_subscription_past_due' => 'Your previous subscription has a payment issue. Your current plan is unchanged. Contact us to resolve the previous subscription.',
         'renews' => 'Renews :date · :amount',

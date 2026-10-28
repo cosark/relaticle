@@ -841,6 +841,29 @@ it('warns the owner when the managed invoice is overdue', function (): void {
         ->assertSee('Pay it from '.__('billing.manage.button').' to keep the plan.');
 });
 
+it('marks an overdue managed plan past due with a pay button in its banner', function (): void {
+    [, $workspace] = billingPageOwner();
+    managedPageWorkspace($workspace, 'past_due');
+
+    $html = livewire(Billing::class)
+        ->assertSee(__('billing.status.past_due'))
+        ->assertDontSee(__('billing.status.managed'))
+        ->assertSee(__('billing.managed.tagline_portal'))
+        ->assertDontSee(__('billing.manage.past_due_title'))
+        ->html();
+
+    expect(substr_count($html, 'wire:click="managePortal"'))->toBe(2);
+});
+
+it('keeps the plain managed tagline when no subscription bills the plan', function (): void {
+    [, $workspace] = billingPageOwner();
+    $workspace->forceFill(['plan' => Plan::Concierge])->save();
+
+    livewire(Billing::class)
+        ->assertSee(__('billing.managed.tagline'))
+        ->assertSee(__('billing.status.managed'));
+});
+
 it('hides the renewal line while the managed invoice is overdue', function (): void {
     [, $workspace] = billingPageOwner();
     managedPageWorkspace($workspace, 'past_due');
