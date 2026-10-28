@@ -29,6 +29,11 @@ return [
         'resize' => 'Resize sidebar',
     ],
 
+    'tables' => [
+        'resize_column' => 'Resize column',
+        'resize_column_hint' => 'Drag to resize. Double-click to fit.',
+    ],
+
     'payload_too_large' => 'That change is too large to save. Shorten the content and try again.',
 
     'selects' => [

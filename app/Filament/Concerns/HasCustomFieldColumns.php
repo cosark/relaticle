@@ -54,7 +54,8 @@ trait HasCustomFieldColumns
             })
             ->deferFilters(false)
             ->pushColumns($columns)
-            ->pushFilters($builder->filters()->all());
+            ->pushFilters($builder->filters()->all())
+            ->resizableColumns();
     }
 
     private static function nativeColumnIcon(string $name): Heroicon

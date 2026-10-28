@@ -31,7 +31,7 @@ return [
                 'App\Providers\AppServiceProvider::configureRateLimiting' => 70,
                 'App\Providers\AppServiceProvider::register' => 77,
                 'App\Providers\Filament\AppPanelProvider::boot' => 67,
-                'App\Providers\Filament\AppPanelProvider::panel' => 288,
+                'App\Providers\Filament\AppPanelProvider::panel' => 287,
                 'App\Providers\HealthServiceProvider::boot' => 65,
                 'App\Services\AvatarService::getInitials' => 70,
                 'App\Support\CustomFieldOptionPlan::fromToolInput' => 77,
