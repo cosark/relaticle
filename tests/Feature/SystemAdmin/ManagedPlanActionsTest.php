@@ -289,7 +289,7 @@ it('sends nothing when the retyped yearly amount does not match', function (?int
     $workspace = managedPlanWorkspace();
 
     startManagedPlanFor($workspace, ['plan' => Plan::Enterprise->value, 'amount' => 200000, 'amount_confirmation' => $retyped])
-        ->assertHasActionErrors(['amount_confirmation']);
+        ->assertHasActionErrors(['amount_confirmation' => $retyped === null ? 'required' : 'The two amounts differ. Check the yearly amount before Stripe sends the invoice.']);
 
     expect(subscriptionRequests($this->stripe))->toBe(0);
 })->with([

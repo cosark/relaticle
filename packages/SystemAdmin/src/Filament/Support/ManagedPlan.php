@@ -54,6 +54,7 @@ final class ManagedPlan
                     ->prefix('$')
                     ->required()
                     ->same('amount')
+                    ->validationMessages(['same' => 'The two amounts differ. Check the yearly amount before Stripe sends the invoice.'])
                     ->dehydrated(false),
                 TextInput::make('billing_email')
                     ->label('Billing email')
