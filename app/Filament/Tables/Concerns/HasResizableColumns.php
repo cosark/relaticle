@@ -22,7 +22,7 @@ trait HasResizableColumns
     {
         $width = (int) $newWidth;
 
-        if ($width <= 0) {
+        if ($width <= 0 || $this->getTable()->getColumn($columnName) === null) {
             return;
         }
 

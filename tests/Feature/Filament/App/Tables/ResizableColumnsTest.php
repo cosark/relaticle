@@ -97,6 +97,12 @@ it('ignores a width that is not a positive number', function (string $sent): voi
     expect(livewire(ListCompanies::class)->instance()->getResizableColumnWidths())->toBe([]);
 })->with(['0', '-5', 'abc']);
 
+it('ignores a width for a column the table does not have', function (): void {
+    livewire(ListCompanies::class)->call('updateResizableColumnWidth', 'not_a_column', '300');
+
+    expect(livewire(ListCompanies::class)->instance()->getResizableColumnWidths())->toBe([]);
+});
+
 it('keeps the width of a column hidden and shown again', function (): void {
     $component = livewire(ListCompanies::class)
         ->call('updateResizableColumnWidth', 'created_at', '300');

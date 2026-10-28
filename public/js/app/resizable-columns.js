@@ -24,8 +24,9 @@ function ensureDragGuideline(wrapper) {
     return dragGuideline
 }
 
+// `wire:navigate` swaps the whole body, which detaches a badge created on an earlier page.
 function ensureDragBadge() {
-    if (!dragBadge) {
+    if (!dragBadge?.isConnected) {
         dragBadge = document.createElement('div')
         dragBadge.className = 'column-resize-badge'
         document.body.appendChild(dragBadge)
@@ -301,19 +302,7 @@ function reapplyHeader(th) {
         th.insertBefore(wrapper, th.firstChild)
     }
     if (!th.querySelector('.column-resize-handle-bar')) {
-        const handle = createHandleBar()
-        th.appendChild(handle)
-        const data = window.Alpine?.$data?.(th)
-        if (data && typeof data.startResize === 'function') {
-            handle.addEventListener('mousedown', (e) => data.startResize(e))
-            if (typeof data.autoFit === 'function') {
-                handle.addEventListener('dblclick', (e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    data.autoFit()
-                })
-            }
-        }
+        window.Alpine?.$data?.(th)?.createHandle?.()
     }
 }
 

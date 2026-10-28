@@ -36,6 +36,27 @@ function dragColumnEdge(string $column, int $by): string
     JS, headerSelector($column), $by, $by);
 }
 
+function dragFeedbackMidDrag(string $column): string
+{
+    return sprintf(<<<'JS'
+        (() => {
+            const handle = document.querySelector(`%s .column-resize-handle-bar`);
+            const box = handle.getBoundingClientRect();
+            const x = box.left + box.width / 2;
+            const y = box.top + box.height / 2;
+            handle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: x, clientY: y }));
+            document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x + 40, clientY: y }));
+            const badge = document.querySelector('.column-resize-badge');
+            const feedback = {
+                badge: badge !== null && badge.isConnected && getComputedStyle(badge).display !== 'none',
+                handleActive: document.querySelector(`%s .column-resize-handle-bar`).classList.contains('active'),
+            };
+            document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: x + 40, clientY: y }));
+            return feedback.badge && feedback.handleActive;
+        })();
+    JS, headerSelector($column), headerSelector($column));
+}
+
 beforeEach(function (): void {
     $this->withVite();
 
@@ -105,6 +126,7 @@ it('keeps resizing after navigating to another table and after sorting', functio
     $page->wait(1)
         ->assertScript($savedWidth, (string) ($before + 120))
         ->assertScript($oneHandlePerHeader, true)
+        ->assertScript(dragFeedbackMidDrag('name'), true)
         ->assertNoJavaScriptErrors();
 });
 
