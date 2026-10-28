@@ -46,6 +46,15 @@ final class ManagedPlan
                     ->prefix('$')
                     ->default(Plan::Concierge->defaultYearlyPrice())
                     ->required(),
+                TextInput::make('amount_confirmation')
+                    ->label('Type the yearly amount again')
+                    ->helperText('Stripe emails the invoice to the customer as soon as you send it.')
+                    ->numeric()
+                    ->integer()
+                    ->prefix('$')
+                    ->required()
+                    ->same('amount')
+                    ->dehydrated(false),
                 TextInput::make('billing_email')
                     ->label('Billing email')
                     ->helperText('Optional. Receives the invoice link too. The owner stays the Stripe customer.')

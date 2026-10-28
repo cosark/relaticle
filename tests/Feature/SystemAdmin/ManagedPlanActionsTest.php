@@ -85,7 +85,7 @@ function managedPlanWorkspace(): Workspace
 function startManagedPlanFor(Workspace $workspace, array $data): Testable
 {
     return livewire(ListWorkspaces::class)
-        ->callAction(TestAction::make('startManagedPlan')->table($workspace), $data);
+        ->callAction(TestAction::make('startManagedPlan')->table($workspace), ['amount_confirmation' => $data['amount'] ?? null, ...$data]);
 }
 
 function subscriptionRequests(StripeRecorder $stripe): int
@@ -268,6 +268,18 @@ it('refuses a second start while the first is still talking to Stripe', function
 
     expect(subscriptionRequests($this->stripe))->toBe(0);
 });
+
+it('sends nothing when the retyped yearly amount does not match', function (?int $retyped): void {
+    $workspace = managedPlanWorkspace();
+
+    startManagedPlanFor($workspace, ['plan' => Plan::Enterprise->value, 'amount' => 200000, 'amount_confirmation' => $retyped])
+        ->assertHasActionErrors(['amount_confirmation']);
+
+    expect(subscriptionRequests($this->stripe))->toBe(0);
+})->with([
+    'an extra zero' => [20000],
+    'left empty' => [null],
+]);
 
 it('refuses a customer with a Stripe balance', function (): void {
     $workspace = managedPlanWorkspace();
@@ -558,7 +570,7 @@ it('offers withdraw on the workspace page right after the invoice is sent', func
     $workspace = managedPlanWorkspace();
 
     livewire(ViewWorkspace::class, ['record' => $workspace->getRouteKey()])
-        ->callAction('startManagedPlan', ['plan' => Plan::Concierge->value, 'amount' => 708])
+        ->callAction('startManagedPlan', ['plan' => Plan::Concierge->value, 'amount' => 708, 'amount_confirmation' => 708])
         ->assertHasNoActionErrors()
         ->assertActionVisible('withdrawManagedInvoice');
 });
