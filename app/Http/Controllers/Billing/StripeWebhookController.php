@@ -128,7 +128,7 @@ final class StripeWebhookController extends CashierWebhookController
             return;
         }
 
-        RefreshManagedRenewal::dispatch($subscription->stripe_id);
+        dispatch(new RefreshManagedRenewal($subscription->stripe_id));
 
         $previousStatus = $payload['data']['previous_attributes']['status'] ?? null;
 

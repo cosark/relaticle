@@ -207,7 +207,7 @@ final class Billing extends Page
         $renewal = Cache::get(RefreshManagedRenewal::CACHE_PREFIX.$managedSubscription->stripe_id);
 
         if (! is_array($renewal)) {
-            RefreshManagedRenewal::dispatch($managedSubscription->stripe_id);
+            dispatch(new RefreshManagedRenewal($managedSubscription->stripe_id));
 
             return null;
         }

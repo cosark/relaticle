@@ -92,7 +92,7 @@ final readonly class ActivateManagedPlan
 
         $this->cancelReplaced($workspace, $stripeSubscription->id, $invoiceId);
 
-        RefreshManagedRenewal::dispatch($stripeSubscription->id);
+        dispatch(new RefreshManagedRenewal($stripeSubscription->id));
     }
 
     private function cancelReplaced(Workspace $workspace, string $activatedId, string $invoiceId): void
