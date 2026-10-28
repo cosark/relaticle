@@ -201,13 +201,10 @@ it('keeps a dragged width after signing in again', function (): void {
 
     $page->script("document.querySelector('form[action$=\"/logout\"]').submit()");
 
-    $page->assertVisible('[id="form.email"]')
-        ->type('[id="form.email"]', $this->user->email)
-        ->click('button[type="submit"]')
-        ->assertVisible('[id="form.password"]')
-        ->assertScript(asyncAlpineComponentsLoaded())
-        ->type('[id="form.password"]', 'password')
-        ->click('button[type="submit"]')
+    $page->assertPathIs('/app/login')
+        ->assertScript(asyncAlpineComponentsLoaded());
+
+    loginViaBrowser($this->user, page: $page)
         ->assertPathIs("/app/{$this->workspace->slug}")
         ->navigate("/app/{$this->workspace->slug}/companies")
         ->assertVisible(headerSelector('created_at').' .column-resize-handle-bar')

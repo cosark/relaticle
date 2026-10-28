@@ -118,6 +118,23 @@ it('writes nothing on a follow-up request that changes nothing', function (strin
     expect(savedPreferences())->toBe(0);
 })->with('remembered list pages');
 
+it('writes nothing on follow-up requests when a saved state is open', function (string $page): void {
+    $component = livewire($page);
+    $component->call('applyTableColumnManager', createdAtHiddenAndFirst($component->get('tableColumns')), true)
+        ->set('tableSort', 'created_at:desc')
+        ->set('tableSearch', 'acme')
+        ->set('tableRecordsPerPage', 50)
+        ->set('tableFilters', ['trashed' => ['value' => 0]])
+        ->call('updateResizableColumnWidth', 'created_at', '300');
+    $updatedAt = TablePreference::query()->withoutGlobalScopes()->value('updated_at');
+
+    $this->travelTo(now()->addHour());
+    session()->flush();
+    livewire($page)->call('$refresh')->call('gotoPage', 2)->call('$refresh');
+
+    expect(TablePreference::query()->withoutGlobalScopes()->value('updated_at'))->toEqual($updatedAt);
+})->with('remembered list pages');
+
 it('lets a query string sort win over saved state and writes nothing', function (): void {
     livewire(ListCompanies::class)->set('tableSort', 'created_at:desc');
     $updatedAt = TablePreference::query()->withoutGlobalScopes()->value('updated_at');

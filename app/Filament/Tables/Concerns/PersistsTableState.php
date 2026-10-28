@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use Filament\Facades\Filament;
 use Livewire\Attributes\Locked;
+use LogicException;
 
 trait PersistsTableState
 {
@@ -111,7 +112,8 @@ trait PersistsTableState
     {
         $model = $this->getModel();
 
-        return CrmEntity::tryFromModel(new $model);
+        return CrmEntity::tryFromModel(new $model)
+            ?? throw new LogicException("{$model} is not a CRM entity, so its table state cannot be remembered.");
     }
 
     private function storedTableState(): TableStateData
