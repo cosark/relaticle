@@ -183,3 +183,34 @@ it('keeps a width when the table is sorted straight after the drag', function ()
         ->assertScript(headerWidth('created_at'), $before + 120)
         ->assertNoJavaScriptErrors();
 });
+
+it('keeps a dragged width after signing in again', function (): void {
+    $savedWidth = sprintf('(() => document.querySelector(`%s`).dataset.resizableWidth)()', headerSelector('created_at'));
+
+    $page = loginViaBrowser($this->user)
+        ->assertPathIs("/app/{$this->workspace->slug}")
+        ->resize(1440, 900)
+        ->navigate("/app/{$this->workspace->slug}/companies")
+        ->assertVisible(headerSelector('created_at').' .column-resize-handle-bar');
+
+    $before = $page->script(headerWidth('created_at'));
+
+    $page->script(dragColumnEdge('created_at', 120));
+    $page->wait(1.5)
+        ->assertScript($savedWidth, (string) ($before + 120));
+
+    $page->script("document.querySelector('form[action$=\"/logout\"]').submit()");
+
+    $page->assertVisible('[id="form.email"]')
+        ->type('[id="form.email"]', $this->user->email)
+        ->click('button[type="submit"]')
+        ->assertVisible('[id="form.password"]')
+        ->assertScript(asyncAlpineComponentsLoaded())
+        ->type('[id="form.password"]', 'password')
+        ->click('button[type="submit"]')
+        ->assertPathIs("/app/{$this->workspace->slug}")
+        ->navigate("/app/{$this->workspace->slug}/companies")
+        ->assertVisible(headerSelector('created_at').' .column-resize-handle-bar')
+        ->assertScript($savedWidth, (string) ($before + 120))
+        ->assertNoJavaScriptErrors();
+});
