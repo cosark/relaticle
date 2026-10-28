@@ -34,7 +34,7 @@ trait HasResizableColumns
         ]);
 
         // The columns were stamped at boot, and a sort in the same request renders them.
-        ResizableColumns::apply($this->getTable());
+        $this->getTable()->resizableColumns();
     }
 
     private function resizableColumnsSessionKey(): string

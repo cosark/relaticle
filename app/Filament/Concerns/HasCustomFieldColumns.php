@@ -6,7 +6,6 @@ namespace App\Filament\Concerns;
 
 use App\Enums\CrmEntity;
 use App\Filament\Components\Tables\ColumnHeaderLabel;
-use App\Filament\Tables\ResizableColumns;
 use App\Models\CustomField;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\Column;
@@ -49,13 +48,14 @@ trait HasCustomFieldColumns
             $column->label(ColumnHeaderLabel::make($label, self::nativeColumnIcon($column->getName())));
         }
 
-        return ResizableColumns::apply($table
+        return $table
             ->modifyQueryUsing(function (Builder $query): void {
                 $query->with('customFieldValues.customField');
             })
             ->deferFilters(false)
             ->pushColumns($columns)
-            ->pushFilters($builder->filters()->all()));
+            ->pushFilters($builder->filters()->all())
+            ->resizableColumns();
     }
 
     private static function nativeColumnIcon(string $name): Heroicon
