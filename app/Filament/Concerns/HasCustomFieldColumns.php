@@ -53,7 +53,6 @@ trait HasCustomFieldColumns
                 $query->with('customFieldValues.customField');
             })
             ->deferFilters(false)
-            ->persistInSession(false)
             ->pushColumns($columns)
             ->pushFilters($builder->filters()->all())
             ->resizableColumns();

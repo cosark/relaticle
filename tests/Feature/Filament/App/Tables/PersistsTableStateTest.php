@@ -6,8 +6,6 @@ use App\Actions\TableLayouts\SaveTablePreference;
 use App\Data\TableStateData;
 use App\Enums\CrmEntity;
 use App\Filament\Resources\CompanyResource\Pages\ListCompanies;
-use App\Filament\Resources\CompanyResource\Pages\ViewCompany;
-use App\Filament\Resources\CompanyResource\RelationManagers\PeopleRelationManager;
 use App\Filament\Resources\NoteResource\Pages\ManageNotes;
 use App\Filament\Resources\OpportunityResource\Pages\ListOpportunities;
 use App\Filament\Resources\PeopleResource\Pages\ListPeople;
@@ -189,16 +187,6 @@ it('stops writing table state to the session', function (): void {
     expect(session()->has($component->instance()->getTableSortSessionKey()))->toBeFalse()
         ->and(session()->has($component->instance()->getTableColumnsSessionKey()))->toBeFalse()
         ->and(session()->get('filament.tables'))->toBeNull();
-});
-
-it('leaves relation managers on session persistence', function (): void {
-    $company = Company::factory()->for($this->user->currentWorkspace)->create();
-
-    $table = Livewire::test(PeopleRelationManager::class, ['ownerRecord' => $company, 'pageClass' => ViewCompany::class])
-        ->instance()->getTable();
-
-    expect($table->persistsColumnsInSession())->toBeTrue()
-        ->and($table->persistsSortInSession())->toBeFalse();
 });
 
 it('brings back a width on a new visit', function (string $page): void {

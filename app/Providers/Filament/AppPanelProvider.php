@@ -225,6 +225,7 @@ final class AppPanelProvider extends PanelProvider
                 ->columnManager(! $table->getLivewire() instanceof RelationManager)
                 ->defaultPaginationPageOption(self::DEFAULT_PAGINATION_PAGE_OPTION)
                 ->paginationPageOptions(fn (HasTable $livewire): array => $this->paginationPageOptions($livewire))
+                ->persistColumnsInSession(false)
             : $table);
     }
 
