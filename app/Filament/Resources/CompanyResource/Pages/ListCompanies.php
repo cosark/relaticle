@@ -7,7 +7,6 @@ namespace App\Filament\Resources\CompanyResource\Pages;
 use App\Filament\Concerns\HasCustomFieldColumns;
 use App\Filament\Exports\CompanyExporter;
 use App\Filament\Resources\CompanyResource;
-use App\Filament\Tables\Concerns\HasResizableColumns;
 use App\Models\Company;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -22,7 +21,6 @@ use Relaticle\ImportWizard\Filament\Pages\ImportCompanies;
 final class ListCompanies extends ListRecords
 {
     use HasCustomFieldColumns;
-    use HasResizableColumns;
 
     /** @var class-string<CompanyResource> */
     protected static string $resource = CompanyResource::class;

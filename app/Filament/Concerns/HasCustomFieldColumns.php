@@ -6,6 +6,8 @@ namespace App\Filament\Concerns;
 
 use App\Enums\CrmEntity;
 use App\Filament\Components\Tables\ColumnHeaderLabel;
+use App\Filament\Tables\Concerns\HasResizableColumns;
+use App\Filament\Tables\Concerns\PersistsTableState;
 use App\Models\CustomField;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\Column;
@@ -16,6 +18,9 @@ use Relaticle\CustomFields\Facades\CustomFields;
 
 trait HasCustomFieldColumns
 {
+    use HasResizableColumns;
+    use PersistsTableState;
+
     public function table(Table $table): Table
     {
         $builder = CustomFields::table()->forModel($this->getModel());

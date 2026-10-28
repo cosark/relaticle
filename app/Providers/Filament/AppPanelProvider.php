@@ -160,16 +160,7 @@ final class AppPanelProvider extends PanelProvider
             ? $emptyState->compact()
             : $emptyState);
 
-        // Table and Schema configuration is global, so both callbacks have to check
-        // which panel is actually serving the request before they touch the format.
-        Table::configureUsing(fn (Table $table): Table => $this->isCurrentPanel()
-            ? $table
-                ->defaultDateTimeDisplayFormat(self::DATE_TIME_FORMAT)
-                ->reorderableColumns()
-                ->columnManager(! $table->getLivewire() instanceof RelationManager)
-                ->defaultPaginationPageOption(self::DEFAULT_PAGINATION_PAGE_OPTION)
-                ->paginationPageOptions(fn (HasTable $livewire): array => $this->paginationPageOptions($livewire))
-            : $table);
+        $this->configureTables();
 
         $this->formatDateTimesInSchemas();
 
@@ -223,11 +214,26 @@ final class AppPanelProvider extends PanelProvider
             JS;
     }
 
+    private function configureTables(): void
+    {
+        // Table and Schema configuration is global, so both callbacks have to check
+        // which panel is actually serving the request before they touch the format.
+        Table::configureUsing(fn (Table $table): Table => $this->isCurrentPanel()
+            ? $table
+                ->defaultDateTimeDisplayFormat(self::DATE_TIME_FORMAT)
+                ->reorderableColumns()
+                ->columnManager(! $table->getLivewire() instanceof RelationManager)
+                ->defaultPaginationPageOption(self::DEFAULT_PAGINATION_PAGE_OPTION)
+                ->paginationPageOptions(fn (HasTable $livewire): array => $this->paginationPageOptions($livewire))
+                ->persistColumnsInSession(false)
+            : $table);
+    }
+
     /** @return list<int> */
     private function paginationPageOptions(HasTable $livewire): array
     {
-        $onePage = (int) $livewire->getTable()->getDefaultPaginationPageOption();
-        $pageOptions = [$onePage, $onePage * 2, $onePage * 4];
+        $pageOptions = self::pageSizeOptions($livewire->getTable());
+        $onePage = $pageOptions[0];
 
         // Mount reads these before any query runs; afterwards the count comes from the
         // already-fetched paginator, and a single option is what hides the select.
@@ -240,6 +246,14 @@ final class AppPanelProvider extends PanelProvider
         }
 
         return [$onePage];
+    }
+
+    /** @return list<int> */
+    public static function pageSizeOptions(Table $table): array
+    {
+        $onePage = (int) $table->getDefaultPaginationPageOption();
+
+        return [$onePage, $onePage * 2, $onePage * 4];
     }
 
     /**

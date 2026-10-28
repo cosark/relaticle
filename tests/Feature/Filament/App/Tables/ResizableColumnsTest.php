@@ -12,6 +12,7 @@ use App\Filament\Tables\Concerns\HasResizableColumns;
 use App\Filament\Tables\ResizableColumns;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Tables\Columns\Column;
 use Livewire\Features\SupportTesting\Testable;
 
 mutates(HasResizableColumns::class, ResizableColumns::class);
@@ -71,23 +72,24 @@ it('gives a column an exact default width', function (string $page): void {
         ->and($attributes['style'])->toBe('min-width: 180px; width: 180px; max-width: 180px');
 })->with('list pages');
 
-it('keeps a width for the session', function (string $page): void {
+it('keeps a width across visits', function (string $page): void {
     livewire($page)->call('updateResizableColumnWidth', 'created_at', '300');
+    session()->flush();
 
     $component = livewire($page);
 
-    expect($component->instance()->getResizableColumnWidths())->toBe(['created_at' => ['width' => '300']])
+    expect($component->instance()->getResizableColumnWidths())->toBe(['created_at' => 300])
         ->and(headerAttributes($component, 'created_at')['data-resizable-width'])->toBe('300');
 })->with('list pages');
 
-it('clamps a width to the allowed range', function (string $sent, string $stored): void {
+it('clamps a width to the allowed range', function (string $sent, int $stored): void {
     livewire(ListCompanies::class)->call('updateResizableColumnWidth', 'created_at', $sent);
 
     expect(livewire(ListCompanies::class)->instance()->getResizableColumnWidths())
-        ->toBe(['created_at' => ['width' => $stored]]);
+        ->toBe(['created_at' => $stored]);
 })->with([
-    'below the minimum' => ['5', '40'],
-    'above the maximum' => ['99999', '1000'],
+    'below the minimum' => ['5', 40],
+    'above the maximum' => ['99999', 1000],
 ]);
 
 it('ignores a width that is not a positive number', function (string $sent): void {
@@ -118,3 +120,36 @@ it('keeps widths apart per page', function (): void {
 
     expect(livewire(ListPeople::class)->instance()->getResizableColumnWidths())->toBe([]);
 });
+
+it('renders a saved width over a width the column sets itself', function (): void {
+    $component = livewire(ListPeople::class);
+    $column = collect($component->instance()->getTable()->getColumns())
+        ->first(fn (Column $column): bool => filled($column->getWidth()) && $column->getWidth() !== '180px');
+
+    $component->call('updateResizableColumnWidth', $column->getName(), '500');
+
+    $columnId = headerAttributes($component, $column->getName())['data-resizable-column-id'];
+    preg_match('/<th[^>]*data-resizable-column-id="'.preg_quote($columnId, '/').'"[^>]*style="([^"]*)"/s', livewire(ListPeople::class)->html(), $match);
+
+    expect($match[1])->toContain('width: 500px')->not->toContain("width: {$column->getWidth()}");
+});
+
+it('uses the default width for a column whose own width is not in pixels', function (string $width): void {
+    $component = livewire(ListCompanies::class);
+    $table = $component->instance()->getTable();
+    $table->getColumn('created_at')->width($width);
+
+    $table->resizableColumns();
+
+    expect(headerAttributes($component, 'created_at')['data-resizable-width'])->toBe('180');
+})->with(['10rem', '50%']);
+
+it('keeps a pixel width the column sets itself', function (string $width): void {
+    $component = livewire(ListCompanies::class);
+    $table = $component->instance()->getTable();
+    $table->getColumn('created_at')->width($width);
+
+    $table->resizableColumns();
+
+    expect(headerAttributes($component, 'created_at')['data-resizable-width'])->toBe('240');
+})->with(['240px', '240']);
