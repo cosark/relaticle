@@ -153,14 +153,16 @@ it('logs a tampered update at warning level with the class and the request ip', 
 });
 
 it('reports an exception raised before the console request is bound', function (): void {
-    Exceptions::fake();
+    Log::spy();
     $request = resolve('request');
     app()->forgetInstance('request');
     Request::clearResolvedInstance();
 
-    report(new RuntimeException('console boot error'));
+    Exceptions::handler()->report(new RuntimeException('console boot error'));
 
     app()->instance('request', $request);
 
-    Exceptions::assertReported(RuntimeException::class);
+    Log::shouldHaveReceived('error')->withArgs(
+        fn (string $message): bool => $message === 'console boot error',
+    )->once();
 });
