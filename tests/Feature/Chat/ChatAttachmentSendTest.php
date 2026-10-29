@@ -252,6 +252,9 @@ it('hands off a wide file sent alone instead of inlining megabytes of prompt', f
 });
 
 it('stores a handoff reply for a large file sent alone without running the model or spending a credit', function (): void {
+    Feature::define(Billing::class, true);
+    $this->workspace->forceFill(['hosted_free_grandfathered_at' => now()])->save();
+
     Queue::fake();
     $attachmentId = attachCsv(26);
     $before = AiCreditBalance::query()->where('workspace_id', $this->workspace->getKey())->value('credits_remaining');

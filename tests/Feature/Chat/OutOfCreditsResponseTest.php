@@ -5,13 +5,19 @@ declare(strict_types=1);
 use App\Enums\Plan;
 use App\Features\Billing;
 use App\Models\User;
+use App\Services\Billing\PlanEntitlements;
+use App\Services\SelfHostedEntitlements;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Laravel\Pennant\Feature;
+use Relaticle\Chat\Http\Controllers\ChatController;
 use Relaticle\Chat\Jobs\ProcessChatMessage;
 use Relaticle\Chat\Models\AiCreditBalance;
 use Relaticle\Chat\Models\AiCreditTransaction;
+use Relaticle\Chat\Services\CreditService;
+
+mutates(ChatController::class, CreditService::class, SelfHostedEntitlements::class, PlanEntitlements::class);
 
 beforeEach(function (): void {
     Queue::fake();

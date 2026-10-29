@@ -272,6 +272,9 @@ it('atomically reserves a credit on send so concurrent sends cannot overspend', 
 });
 
 it('does not reserve a credit on send when the request fails validation', function (): void {
+    Feature::define(Billing::class, true);
+    $this->workspace->forceFill(['hosted_free_grandfathered_at' => now()])->save();
+
     Queue::fake();
 
     $createRes = $this->postJson(route('chat.conversations.create'), [

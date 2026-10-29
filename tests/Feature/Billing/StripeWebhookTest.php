@@ -406,6 +406,8 @@ it('keeps the generic trial when a managed subscription is created awaiting its 
 });
 
 it('never double-grants across a mid-trial conversion', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     test()->travelTo(new DateTimeImmutable('2026-06-25 12:00:00', new DateTimeZone('UTC')));
 
     $workspace = stripeBillingWorkspace();
@@ -1104,6 +1106,8 @@ it('grants nothing when a concurrent delivery switched the plan on first', funct
 });
 
 it('grants and refunds once when Stripe redelivers the paid invoice', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     $this->travelTo(now()->startOfSecond());
 
     $workspace = proWorkspaceAwaitingManagedPayment();
@@ -1232,6 +1236,8 @@ it('reports and grants nothing when the paid subscription is already canceled at
 });
 
 it('grants the plan and retries the switch refund when the refund call fails', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     $this->travelTo(now()->startOfSecond());
 
     $workspace = proWorkspaceAwaitingManagedPayment();

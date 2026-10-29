@@ -141,6 +141,9 @@ it('returns 422 when document text exceeds 5000 characters', function (): void {
 });
 
 it('does not consume a credit on send when the document is empty', function (): void {
+    Feature::define(Billing::class, true);
+    $this->workspace->forceFill(['hosted_free_grandfathered_at' => now()])->save();
+
     Queue::fake();
 
     $createRes = $this->postJson(route('chat.conversations.create'), [
@@ -159,6 +162,9 @@ it('does not consume a credit on send when the document is empty', function (): 
 });
 
 it('does not consume a credit on send when the document text is too long', function (): void {
+    Feature::define(Billing::class, true);
+    $this->workspace->forceFill(['hosted_free_grandfathered_at' => now()])->save();
+
     Queue::fake();
 
     $createRes = $this->postJson(route('chat.conversations.create'), [

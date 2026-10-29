@@ -11,6 +11,8 @@ use App\Filament\Pages\CreateWorkspace;
 use App\Listeners\CreateSetupConversationListener;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Billing\PlanEntitlements;
+use App\Services\SelfHostedEntitlements;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -22,10 +24,11 @@ use Relaticle\Chat\Jobs\ProcessChatMessage;
 use Relaticle\Chat\Livewire\Chat\ChatInterface;
 use Relaticle\Chat\Models\AgentConversation;
 use Relaticle\Chat\Models\AiCreditBalance;
+use Relaticle\Chat\Services\CreditService;
 use Relaticle\Chat\Support\ConversationTitleGate;
 use Relaticle\Chat\Support\TurnPresence;
 
-mutates(CreateSetupConversation::class, CreateSetupConversationListener::class, StartSetupGreeting::class);
+mutates(CreateSetupConversation::class, CreateSetupConversationListener::class, StartSetupGreeting::class, CreditService::class, SelfHostedEntitlements::class, PlanEntitlements::class);
 
 beforeEach(function (): void {
     Feature::define(SetupConversation::class, true);

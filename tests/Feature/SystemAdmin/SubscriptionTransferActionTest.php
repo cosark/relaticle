@@ -187,6 +187,8 @@ it('grants the target the Pro allowance, drops the source to Free and keeps purc
 });
 
 it('anchors the target credit period on the original subscription start date', function (): void {
+    Feature::define(Billing::class, true);
+
     [, $target, $subscription] = transferPair();
 
     $anchor = now()->subDays(40)->startOfHour();

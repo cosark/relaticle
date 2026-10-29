@@ -327,6 +327,8 @@ it('keeps a sysadmin-granted plan when a stale trial timestamp expires', functio
 });
 
 it('grants exactly one allowance for a trial that crosses a month boundary', function (): void {
+    Feature::define(Billing::class, true);
+
     $this->travelTo(new DateTimeImmutable('2026-06-25 12:00:00', new DateTimeZone('UTC')));
 
     [$user, $workspace] = trialOwnerAndWorkspace();

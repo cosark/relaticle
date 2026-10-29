@@ -503,6 +503,10 @@ final readonly class CreditService
 
     public function resetPeriod(Workspace $workspace, ?string $sysadminId = null): void
     {
+        if (! $this->entitlements->metersCredits($workspace)) {
+            return;
+        }
+
         DB::transaction(function () use ($workspace, $sysadminId): void {
             $plan = $workspace->plan;
             $allowance = $this->allowanceFor($workspace);
