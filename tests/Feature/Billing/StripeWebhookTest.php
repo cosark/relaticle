@@ -8,6 +8,7 @@ use App\Actions\Billing\GrantPurchasedCredits;
 use App\Actions\Billing\NotifyWorkspaceOfPaymentFailure;
 use App\Actions\Billing\StartProTrial;
 use App\Actions\Billing\SyncWorkspacePlanFromSubscription;
+use App\Contracts\Entitlements;
 use App\Enums\BillingStatus;
 use App\Enums\Notifications\NotificationReason;
 use App\Enums\Plan;
@@ -23,7 +24,6 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Notifications\ManagedInvoiceOverdueNotification;
 use App\Notifications\PaymentFailedNotification;
-use App\Services\Billing\HostedWorkspaceAccess;
 use App\Support\CurrentWorkspace;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -1573,7 +1573,7 @@ it('drops a lapsed Concierge workspace to Free and tells the owner', function ()
     $workspace->forceFill(['plan' => Plan::Concierge])->save();
     managedSubscriptionOn($workspace);
 
-    expect(resolve(HostedWorkspaceAccess::class)->allows($workspace->refresh()))->toBeTrue();
+    expect(resolve(Entitlements::class)->allowsAccess($workspace->refresh()))->toBeTrue();
 
     sendStripeWebhook(managedSubscriptionEvent($workspace, 'deleted', overrides: [
         'status' => 'canceled',
@@ -1581,7 +1581,7 @@ it('drops a lapsed Concierge workspace to Free and tells the owner', function ()
     ]))->assertSuccessful();
 
     expect($workspace->refresh()->plan)->toBe(Plan::Free)
-        ->and(resolve(HostedWorkspaceAccess::class)->allows($workspace))->toBeFalse();
+        ->and(resolve(Entitlements::class)->allowsAccess($workspace))->toBeFalse();
 
     Mail::assertQueued(ProEndedMail::class, 1);
     Mail::assertQueued(ProEndedMail::class, fn (ProEndedMail $mail): bool => $mail->hasTo($workspace->owner->email)
@@ -1598,7 +1598,7 @@ it('keeps a past-due Concierge workspace on its plan', function (): void {
     sendStripeWebhook(managedSubscriptionEvent($workspace, 'updated', overrides: ['status' => 'past_due']))->assertSuccessful();
 
     expect($workspace->refresh()->plan)->toBe(Plan::Concierge)
-        ->and(resolve(HostedWorkspaceAccess::class)->allows($workspace))->toBeTrue();
+        ->and(resolve(Entitlements::class)->allowsAccess($workspace))->toBeTrue();
 
     Mail::assertNotQueued(ProEndedMail::class);
 });

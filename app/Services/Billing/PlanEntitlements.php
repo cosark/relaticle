@@ -44,4 +44,9 @@ final readonly class PlanEntitlements implements Entitlements
     {
         return $workspace->plan->rateLimit();
     }
+
+    public function allowsAccess(Workspace $workspace): bool
+    {
+        return $workspace->billingStatus()->grantsAccess();
+    }
 }

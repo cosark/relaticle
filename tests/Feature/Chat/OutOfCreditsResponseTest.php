@@ -195,7 +195,7 @@ it('offers a top-up url to exhausted paid plans when billing is active', functio
 
     // A valid Cashier subscription is how a real paying customer reaches this
     // plan/state (SyncWorkspacePlanFromSubscription only sets Plan::Pro when the
-    // subscription is valid()); it also satisfies HostedWorkspaceAccess::allows()
+    // subscription is valid()); it also satisfies Entitlements::allowsAccess()
     // via subscription()?->valid(), so the request isn't paused before reaching
     // ChatController.
     $workspace->subscriptions()->create([

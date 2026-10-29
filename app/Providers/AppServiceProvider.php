@@ -31,7 +31,6 @@ use App\Models\Workspace;
 use App\Models\WorkspaceInvitation;
 use App\Notifications\Channels\InboxChannel;
 use App\Onboarding\ActivationSteps;
-use App\Services\Billing\HostedWorkspaceAccess;
 use App\Services\Billing\PlanEntitlements;
 use App\Services\DiscordService;
 use App\Services\DockerHubService;
@@ -314,9 +313,9 @@ final class AppServiceProvider extends ServiceProvider
             $user = $parameters['user'] ?? null;
 
             $workspaces = $user instanceof User ? $user->allWorkspaces() : collect();
-            $access = resolve(HostedWorkspaceAccess::class);
+            $access = resolve(Entitlements::class);
 
-            // Re-read the workspaces with their subscriptions eager-loaded: isPaused() reaches
+            // Re-read the workspaces with their subscriptions eager-loaded: allowsAccess() reaches
             // for $workspace->subscription(), and allWorkspaces() hydrates more than one row, which
             // is exactly when strict lazy loading throws.
             /** @var list<string> $pausedWorkspaceIds */
@@ -324,7 +323,7 @@ final class AppServiceProvider extends ServiceProvider
                 ->whereIn('id', $workspaces->pluck('id')->all())
                 ->with('subscriptions')
                 ->get()
-                ->filter(fn (Workspace $workspace): bool => $access->isPaused($workspace))
+                ->filter(fn (Workspace $workspace): bool => ! $access->allowsAccess($workspace))
                 ->map(fn (Workspace $workspace): string => (string) $workspace->getKey())
                 ->values()
                 ->all();
