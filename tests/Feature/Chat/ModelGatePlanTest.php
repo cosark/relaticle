@@ -129,10 +129,13 @@ it('allows an Opus request from a Pro user', function (): void {
 });
 
 it('allows a Free user to send with no explicit model (defaults to Auto)', function (): void {
+    Feature::define(Billing::class, true);
+
     Queue::fake();
 
     $user = User::factory()->withPersonalWorkspace()->create();
     $workspace = $user->currentWorkspace;
+    $workspace->forceFill(['hosted_free_grandfathered_at' => now()])->save();
     expect($workspace->plan)->toBe(Plan::Free);
 
     AiCreditBalance::query()->updateOrCreate(['workspace_id' => $workspace->getKey()], [
@@ -162,10 +165,13 @@ it('allows a Free user to send with no explicit model (defaults to Auto)', funct
 });
 
 it('allows a Free user to explicitly pick Sonnet', function (): void {
+    Feature::define(Billing::class, true);
+
     Queue::fake();
 
     $user = User::factory()->withPersonalWorkspace()->create();
     $workspace = $user->currentWorkspace;
+    $workspace->forceFill(['hosted_free_grandfathered_at' => now()])->save();
     expect($workspace->plan)->toBe(Plan::Free);
 
     AiCreditBalance::query()->updateOrCreate(['workspace_id' => $workspace->getKey()], [
@@ -230,12 +236,15 @@ it('rejects a GPT-5 request from a Free user with a 403', function (): void {
 });
 
 it('allows a Free user to pick Ollama when it is configured', function (): void {
+    Feature::define(Billing::class, true);
+
     Queue::fake();
     config()->set('chat.ollama.model', 'qwen3:14b');
     app()->forgetInstance(ModelRegistry::class);
 
     $user = User::factory()->withPersonalWorkspace()->create();
     $workspace = $user->currentWorkspace;
+    $workspace->forceFill(['hosted_free_grandfathered_at' => now()])->save();
 
     AiCreditBalance::query()->updateOrCreate(['workspace_id' => $workspace->getKey()], [
         'credits_remaining' => 100,
