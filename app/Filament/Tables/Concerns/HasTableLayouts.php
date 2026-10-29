@@ -19,6 +19,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\ValidationException;
 
 trait HasTableLayouts
@@ -63,7 +64,13 @@ trait HasTableLayouts
 
     public function applySavedLayout(string $layoutId): void
     {
-        $layout = $this->visibleTableLayout($layoutId) ?? abort(404);
+        $layout = $this->visibleTableLayout($layoutId);
+
+        if (! $layout instanceof TableLayout) {
+            $this->handleMissingTableLayout($layoutId);
+
+            return;
+        }
 
         $this->applyTableState($layout->state);
         $this->activeTableLayoutId = $layout->getKey();
@@ -79,7 +86,13 @@ trait HasTableLayouts
 
     public function saveTableLayout(): void
     {
-        $layout = $this->getActiveTableLayout() ?? abort(404);
+        $layout = $this->getActiveTableLayout();
+
+        if (! $layout instanceof TableLayout) {
+            $this->handleMissingTableLayout($this->activeTableLayoutId);
+
+            return;
+        }
 
         $layout = resolve(UpdateTableLayout::class)->execute($this->tableLayoutUser(), $layout, ['state' => $this->currentTableState()]);
         $this->appliedTableLayoutHash = $this->currentTableState()->withoutWidths()->hash();
@@ -240,6 +253,19 @@ trait HasTableLayouts
         return $layout instanceof TableLayout && $this->canUpdateTableLayout($layout);
     }
 
+    private function handleMissingTableLayout(?string $layoutId): void
+    {
+        if ($this->activeTableLayoutId === $layoutId) {
+            $this->activeTableLayoutId = null;
+            $this->appliedTableLayoutHash = null;
+        }
+
+        $this->defaultTableLayoutId = $this->defaultTableLayoutId === $layoutId ? null : $this->defaultTableLayoutId;
+        $this->visibleTableLayouts = null;
+
+        Notification::make()->warning()->title(__('filament/panel.tables.layouts.unavailable'))->send();
+    }
+
     private function forgetActiveTableLayout(TableLayout $layout): void
     {
         if ($this->activeTableLayoutId !== $layout->getKey()) {
@@ -266,6 +292,10 @@ trait HasTableLayouts
     {
         try {
             return $write();
+        } catch (UniqueConstraintViolationException) {
+            throw ValidationException::withMessages([
+                "{$schema->getStatePath()}.name" => [__('filament/panel.tables.layouts.name_taken')],
+            ]);
         } catch (ValidationException $exception) {
             throw ValidationException::withMessages([
                 "{$schema->getStatePath()}.name" => $exception->errors()['name'] ?? [],

@@ -543,3 +543,46 @@ it('tells no one when an admin renames or overwrites someone else\'s layout', fu
         ->and($layout->state->sort)->toBe('name:asc')
         ->and(Notification::query()->count())->toBe(0);
 });
+
+it('tells the member instead of failing when the layout they revert was deleted elsewhere', function (): void {
+    $layout = layoutFor($this->user, ['state' => hotLeads()]);
+    $component = livewire(ListCompanies::class)->call('applySavedLayout', $layout->getKey())->set('tableSort', 'name:asc');
+
+    $layout->delete();
+
+    $component->call('revertTableLayout')
+        ->assertNotified('That layout is no longer available.')
+        ->assertSet('activeTableLayoutId', null)
+        ->assertSet('appliedTableLayoutHash', null);
+
+    expect($component->get('tableSort'))->toBe('name:asc');
+});
+
+it('tells the member instead of failing when the layout they save over was deleted elsewhere', function (): void {
+    $layout = layoutFor($this->user, ['state' => hotLeads()]);
+    $component = livewire(ListCompanies::class)->call('applySavedLayout', $layout->getKey())->set('tableSort', 'name:asc');
+
+    $layout->delete();
+
+    $component->call('saveTableLayout')
+        ->assertNotified('That layout is no longer available.')
+        ->assertSet('activeTableLayoutId', null);
+
+    expect(TableLayout::query()->withoutGlobalScopes()->count())->toBe(0);
+});
+
+it('shows the name error when a rename races another save to the same name', function (): void {
+    $layout = layoutFor($this->user, ['name' => 'Old pipeline']);
+
+    TableLayout::updating(function (): void {
+        TableLayout::withoutEvents(function (): void {
+            layoutFor(test()->user, ['name' => 'Hot leads']);
+        });
+    });
+
+    livewire(ListCompanies::class)
+        ->callAction('renameTableLayout', ['name' => 'Hot leads'], ['layout' => $layout->getKey()])
+        ->assertHasActionErrors(['name']);
+
+    expect($layout->refresh()->name)->toBe('Old pipeline');
+});
