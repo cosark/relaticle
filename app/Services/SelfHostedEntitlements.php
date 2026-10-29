@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Contracts\Entitlements;
 use App\Models\Workspace;
+use Relaticle\Chat\Support\ModelDescriptor;
 
 final readonly class SelfHostedEntitlements implements Entitlements
 {
@@ -17,5 +18,10 @@ final readonly class SelfHostedEntitlements implements Entitlements
     public function creditAllowance(Workspace $workspace): int
     {
         return 0;
+    }
+
+    public function allowsModel(?Workspace $workspace, ModelDescriptor $model): bool
+    {
+        return true;
     }
 }
