@@ -36,7 +36,6 @@
     ])));
 
     $billingActive = \Laravel\Pennant\Feature::active(\App\Features\Billing::class);
-    $freeCredits = number_format(\App\Enums\Plan::Free->credits());
     $proCredits = number_format(\App\Enums\Plan::Pro->credits());
     $trialDays = \App\Models\Workspace::PRO_TRIAL_DAYS;
     $maxBatchSize = (int) config('chat.max_batch_size');
@@ -49,14 +48,14 @@
     if ($billingActive) {
         $includedPlanQuestion = __('Is :name included with Relaticle Cloud?', ['name' => $assistantName]);
         $includedPlanAnswer = __(
-            'Yes. New Cloud workspaces include :name during a :days-day Cloud Pro trial. Cloud Pro includes a :credits-credit monthly allowance and every supported cloud model. If the trial ends without a subscription, hosted access pauses. Self-hosted installs use the Free plan\'s :freeCredits-credit monthly allowance and require your own provider key or local model.',
-            ['name' => $assistantName, 'days' => $trialDays, 'credits' => $proCredits, 'freeCredits' => $freeCredits]
+            'Yes. New Cloud workspaces include :name during a :days-day Cloud Pro trial. Cloud Pro includes a :credits-credit monthly allowance and every supported cloud model. If the trial ends without a subscription, hosted access pauses. Self-hosted installs do not meter credits and require your own provider key or local model.',
+            ['name' => $assistantName, 'days' => $trialDays, 'credits' => $proCredits]
         );
     } else {
         $includedPlanQuestion = __('Is :name included in the free plan?', ['name' => $assistantName]);
         $includedPlanAnswer = __(
-            'Yes. Every workspace on the Free plan gets :name with a :credits-credit monthly allowance. A self-hosted install ships without a provider. You add your own key or local model, and pay that provider directly.',
-            ['name' => $assistantName, 'credits' => $freeCredits]
+            'Yes. :name does not meter AI credits on this installation, so there is no credit limit. A self-hosted install ships without a provider. You add your own key or local model, and pay that provider directly.',
+            ['name' => $assistantName]
         );
     }
 
