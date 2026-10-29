@@ -327,10 +327,10 @@ function forgetColumnFocus() {
 
 function restoreColumnFocus(table) {
     if (!pendingColumnFocus) return
-    const handle = columnHandle(table, pendingColumnFocus)
-    if (!handle) return
-    handle.focus()
+    const th = headersOf(table).find((header) => headerName(header) === pendingColumnFocus)
     pendingColumnFocus = null
+    // The title column has no handle, so its sort button takes focus instead.
+    ;(th?.querySelector('.fi-ta-column-handle') ?? th?.querySelector('.fi-ta-header-cell-sort-btn'))?.focus()
 }
 
 // A morph strips and rebuilds the header handles, so a handle is found again by its column.
@@ -361,7 +361,7 @@ function moveTargets(th) {
             left: left ? headerName(left) : null,
             right: headers[index + 2] ? headerName(headers[index + 2]) : null,
         },
-        // Where focus goes when this column is hidden: a neighbour that has a handle.
+        // Where focus goes when this column is hidden: a neighbour with a handle, else the title column.
         neighbour: headerName(left?.dataset.columnLocked === '1' ? headers[index + 1] ?? left : left ?? headers[index + 1]),
     }
 }

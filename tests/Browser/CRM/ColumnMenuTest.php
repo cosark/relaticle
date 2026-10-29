@@ -380,3 +380,18 @@ it('swaps with a neighbour on either side once the dragged column covers half of
     waitUntil($page, headerOrder().'.indexOf("creator.name") === '.$index)
         ->assertNoJavaScriptErrors();
 });
+
+it('focuses the title column after hiding the last column beside it by keyboard', function (): void {
+    $page = companiesTable($this->user, $this->workspace->slug);
+
+    foreach (array_diff($page->script(headerOrder()), ['name', 'created_at']) as $column) {
+        $page->script(openColumnMenu($column));
+        $page->click(columnMenuItem('Hide column'))->assertMissing(columnHeader($column));
+    }
+
+    $page->keys(columnHeader('created_at').' .fi-ta-column-handle', 'Enter');
+    waitUntil($page, menuItemFocused())->keys(':focus', ['ArrowDown', 'ArrowDown', 'Enter']);
+    waitUntil($page, headerOrder().'.join() === "name"');
+    waitUntil($page, '('.focusedColumn().') === "name"')
+        ->assertNoJavaScriptErrors();
+});
