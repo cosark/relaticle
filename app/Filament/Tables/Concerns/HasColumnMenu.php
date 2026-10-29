@@ -36,7 +36,7 @@ trait HasColumnMenu
             ->action(fn (array $data, array $arguments) => $this->labelTableColumn((string) ($arguments['column'] ?? ''), trim((string) $data['label'])));
     }
 
-    public function tableColumnLabel(string $columnName, string $original): string
+    protected function tableColumnLabel(string $columnName, string $original): string
     {
         $this->originalTableColumnLabels[$columnName] = $original;
 

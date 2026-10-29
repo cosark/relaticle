@@ -481,11 +481,20 @@ function startColumnDrag(event, th, wire) {
     let index = startIndex
     let pointer = { x: event.clientX, y: event.clientY }
     let scrollFrame = null
+    let moveFrame = null
 
     const update = () => {
         Object.assign(ghost.style, { left: `${pointer.x - grabOffset}px`, top: `${table.tHead.getBoundingClientRect().top}px` })
         index = dropIndex(slots, source, pointer.x - grabOffset - table.getBoundingClientRect().left)
         shiftColumns(slots, source, index)
+    }
+
+    // The pointer reports more often than the screen paints, so the moves in a frame shift the columns once.
+    const scheduleUpdate = () => {
+        moveFrame ??= requestAnimationFrame(() => {
+            moveFrame = null
+            update()
+        })
     }
 
     const autoScroll = () => {
@@ -518,7 +527,7 @@ function startColumnDrag(event, th, wire) {
             document.body.classList.add('reordering-column')
         }
 
-        update()
+        scheduleUpdate()
         scrollFrame ??= requestAnimationFrame(autoScroll)
     }
 
@@ -528,9 +537,11 @@ function startColumnDrag(event, th, wire) {
         document.removeEventListener('pointercancel', onCancel)
         document.removeEventListener('keydown', onKey)
         if (scrollFrame) cancelAnimationFrame(scrollFrame)
+        if (moveFrame) cancelAnimationFrame(moveFrame)
 
         if (!ghost) return
 
+        update()
         swallowNextClick()
         ghost.remove()
         source.elements.forEach((element) => element.classList.remove('fi-ta-column-dragging'))

@@ -223,7 +223,7 @@ it('keeps the column manager order in step with the headers', function (): void 
 function dragHeader(string $column, string $overColumn, string $side = 'left', string $finish = 'drop', int $dropBelow = 0): string
 {
     return sprintf(<<<'JS'
-        (() => {
+        (async () => {
             const grip = document.querySelector(`%s .fi-ta-resizable-label`);
             const over = document.querySelector(`%s`).getBoundingClientRect();
             const start = grip.getBoundingClientRect();
@@ -233,6 +233,7 @@ function dragHeader(string $column, string $overColumn, string $side = 'left', s
             pointer('pointerdown', start.left + 2, y, grip);
             pointer('pointermove', start.left + 12, y);
             pointer('pointermove', x, y);
+            await new Promise(requestAnimationFrame);
             const mid = {
                 ghost: document.querySelector('.fi-ta-column-drag-ghost')?.isConnected ?? false,
                 shifted: document.querySelector(`%s`).style.transform !== '',
