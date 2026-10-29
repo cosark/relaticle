@@ -246,6 +246,8 @@ it('emits accurate product json-ld offers when billing is off', function (): voi
 });
 
 it('discloses the real per-model credit multiplier instead of a flat allowance claim', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     $this->get('/pricing')
         ->assertOk()
         ->assertSee(__('What counts as an AI credit?'))
@@ -384,6 +386,8 @@ it('does not claim an unconfirmed Enterprise tier is a purchasable offering when
 });
 
 it('describes the chat rate limit as per workspace, not per person', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     $this->get('/pricing')
         ->assertOk()
         ->assertSee(__('Is there a message rate limit?'))
@@ -543,4 +547,15 @@ it('keeps the credits help article in step with each plan allowance', function (
         'Enterprise' => ['Enterprise', 'Agreed with your team', 'Agreed with your team'],
         'Self-hosted' => ['Self-hosted', 'Not metered', config('chat.rate_limit_per_minute').', set by CHAT_RATE_LIMIT_PER_MINUTE (0 for no limit)'],
     ]);
+});
+
+it('leaves the cloud metering questions off a self-hosted pricing page', function (): void {
+    Feature::define(BillingFeature::class, false);
+
+    $this->get('/pricing')
+        ->assertOk()
+        ->assertSee(__('Are self-hosted installs exempt from AI credit limits?'))
+        ->assertDontSee(__('What counts as an AI credit?'))
+        ->assertDontSee(__('Which AI models does my plan unlock?'))
+        ->assertDontSee(__('Is there a message rate limit?'));
 });

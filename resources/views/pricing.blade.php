@@ -244,9 +244,11 @@
                     [__("What's included in the hosted plan?"), $hostedPlanAnswer],
                     ...($billingActive ? [$trialFaq] : []),
                     [__('What happens when I hit a plan limit?'), $planLimitAnswer],
-                    [__('What counts as an AI credit?'), $creditFaqAnswer],
-                    [__('Which AI models does my plan unlock?'), $modelsUnlockAnswer],
-                    [__('Is there a message rate limit?'), $rateLimitAnswer],
+                    ...($billingActive ? [
+                        [__('What counts as an AI credit?'), $creditFaqAnswer],
+                        [__('Which AI models does my plan unlock?'), $modelsUnlockAnswer],
+                        [__('Is there a message rate limit?'), $rateLimitAnswer],
+                    ] : []),
                     [__('Are self-hosted installs exempt from AI credit limits?'), $selfHostedCreditAnswer],
                     [
                         __('Can I switch between self-hosted and cloud?'),
