@@ -189,6 +189,16 @@ it('accepts 60 sends a minute on a self-hosted install and rejects the 61st', fu
         ->and($statuses->last())->toBe(429);
 });
 
+it('applies no limit on a self-hosted install when the configured limit is zero', function (): void {
+    Feature::define(Billing::class, false);
+    config()->set('chat.rate_limit_per_minute', 0);
+    $user = User::factory()->withPersonalWorkspace()->create();
+
+    $statuses = sendChatMessages($user, 15);
+
+    expect($statuses->every(fn (int $status): bool => $status < 300))->toBeTrue();
+});
+
 it('reads the self-hosted limit from config', function (): void {
     Feature::define(Billing::class, false);
     config()->set('chat.rate_limit_per_minute', 3);

@@ -26,7 +26,7 @@ final cost settles after the answer completes.
 | Cloud Pro and its trial | 2,000 | 30 |
 | Cloud Concierge | 5,000 | 30 |
 | Enterprise | Agreed with your team | Agreed with your team |
-| Self-hosted | Not metered | 60, set by `CHAT_RATE_LIMIT_PER_MINUTE` |
+| Self-hosted | Not metered | 60, set by `CHAT_RATE_LIMIT_PER_MINUTE` (0 for no limit) |
 
 Relaticle Cloud has no free plan; what each plan costs is in
 [Billing and plans](/help/workspace/billing-and-plans).

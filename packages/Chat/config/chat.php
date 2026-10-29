@@ -130,7 +130,7 @@ return [
     |
     | Caps how many messages a workspace may send per minute when billing is
     | off. Hosted installs take the limit from the workspace plan instead.
-    | Override with CHAT_RATE_LIMIT_PER_MINUTE in .env.
+    | Override with CHAT_RATE_LIMIT_PER_MINUTE in .env. Zero or less: no limit.
     */
 
     'rate_limit_per_minute' => (int) env('CHAT_RATE_LIMIT_PER_MINUTE', 60),

@@ -77,6 +77,7 @@ use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Facades\FilamentColor;
 use Filament\Support\Facades\FilamentTimezone;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Cache\RateLimiting\Unlimited;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Model;
@@ -604,33 +605,42 @@ final class AppServiceProvider extends ServiceProvider
             return Limit::perMinutes(1440, 240)->by('transcribe-workspace:'.($workspace?->getKey() ?? $request->ip()));
         });
 
-        RateLimiter::for('chat-send', function (Request $request) {
-            /** @var User|null $user */
-            $user = $request->user();
-            $workspace = $user?->currentWorkspace;
+        RateLimiter::for('chat-send', fn (Request $request): Limit|Unlimited => $this->chatSendLimit($request));
+    }
 
-            if ($workspace === null) {
-                return Limit::perMinute(Plan::default()->rateLimit())->by('chat-anon');
-            }
+    private function chatSendLimit(Request $request): Limit|Unlimited
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+        $workspace = $user?->currentWorkspace;
 
-            return Limit::perMinute(resolve(Entitlements::class)->chatRateLimit($workspace))
-                ->by($workspace->getKey())
-                ->response(function (Request $request, array $headers) use ($workspace) {
-                    ChatTelemetry::rateLimited(
-                        workspaceId: (string) $workspace->getKey(),
-                        plan: $workspace->plan->value,
-                    );
+        if ($workspace === null) {
+            return Limit::perMinute(Plan::default()->rateLimit())->by('chat-anon');
+        }
 
-                    $seconds = (int) ($headers['Retry-After'] ?? 0);
+        $limit = resolve(Entitlements::class)->chatRateLimit($workspace);
 
-                    return response()->json([
-                        'error' => 'rate_limited',
-                        'message' => "You're sending messages quickly. You can send again in {$seconds} seconds.",
-                        'retry_after_seconds' => $seconds,
-                        'plan' => $workspace->plan->value,
-                    ], 429, $headers);
-                });
-        });
+        if ($limit <= 0) {
+            return Limit::none();
+        }
+
+        return Limit::perMinute($limit)
+            ->by($workspace->getKey())
+            ->response(function (Request $request, array $headers) use ($workspace) {
+                ChatTelemetry::rateLimited(
+                    workspaceId: (string) $workspace->getKey(),
+                    plan: $workspace->plan->value,
+                );
+
+                $seconds = (int) ($headers['Retry-After'] ?? 0);
+
+                return response()->json([
+                    'error' => 'rate_limited',
+                    'message' => "You're sending messages quickly. You can send again in {$seconds} seconds.",
+                    'retry_after_seconds' => $seconds,
+                    'plan' => $workspace->plan->value,
+                ], 429, $headers);
+            });
     }
 
     private function configureScribe(): void
