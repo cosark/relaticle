@@ -241,12 +241,24 @@ with the workspace.
 The control sits in the table toolbar, after search and before the filter trigger, through
 `TablesRenderHook::TOOLBAR_SEARCH_AFTER` scoped to the five pages. The menu opens with "Standard
 layout", the table as Filament defines it, then the member's own layouts, then the layouts shared
-with the workspace (each with its owner's name). Under a heading carrying the applied layout's
-name come the actions on that layout: Rename, Share with workspace (or Stop sharing), Set as my
-default, Delete layout. Save lives only beside the trigger, where it appears once the layout is
-modified. Save as new layout closes the menu in a group of its own. A star marks the
-member's default layout. With no layout saved, the menu holds only Standard layout and Save as new
-layout. Sharing asks for confirmation first, because every member of the workspace sees the result.
+with the workspace. Each row leads with its type: a table icon for Standard layout, a bookmark for
+a private layout, a group icon for a shared one. Its right edge carries its status: a star on the
+layout that opens by default (Standard layout when the member has picked none), "Shared" on a layout
+the member shares, and the owner's name on someone else's. The applied layout is tinted and
+carries `aria-current`, so the tint is never the only signal.
+
+Every action works on its own row, never on the applied layout alone. Hovering a row swaps its
+status for a Delete button and a vertical `⋯` menu holding Rename, Share with workspace (or Stop
+sharing) and Set as my default (or Remove as my default). Touch has no hover, so it shows status and
+buttons together. Save lives only beside the trigger, where it appears once the layout is modified.
+Save as new layout closes the menu in a group of its own. With no layout saved, the menu holds only
+Standard layout and Save as new layout. Long names truncate in the trigger and the rows, with the
+full name in a tooltip.
+
+Sharing asks for confirmation first, because every member of the workspace sees the result. An
+Admin stopping the share of someone else's layout is asked too, because the layout goes back to its
+owner as a private one and leaves the Admin's list for good. Stopping the share of your own layout
+needs no confirmation, since you can share it again.
 
 ![A changed layout reads "(modified)" and offers Revert and Save](assets/table-layouts/phase-3-layouts-modified.png)
 
@@ -284,6 +296,30 @@ To tell "had not changed it" apart, the preference row stores the hash of the la
 last applied. "Set as my default" may point at any layout the member can see, including someone
 else's shared one. When the member can no longer see it, the default is cleared on load.
 
+#### Telling the owner
+
+When an Admin deletes or stops sharing a member's layout, the owner gets an in-app notice in the
+bell. Without one, the layout simply vanishes from their menu, which reads as a bug.
+
+| The Admin | The owner's notice |
+|---|---|
+| deletes the layout | ":actor deleted your layout "Renewals this quarter"", with the table it was on |
+| stops sharing it | ":actor stopped sharing your layout "Renewals this quarter"", saying it is private to them again |
+| renames or overwrites it | none |
+
+- `TableLayoutChangedNotification` extends `InboxNotification`, with reason `System` and no
+  preference toggle. Its subject is the workspace, as `PaymentFailedNotification`'s is. A deleted
+  layout cannot be its subject: the notice is queued after commit, and `#[DeleteWhenMissingModels]`
+  would drop it.
+- The row stores facts, never a model: the layout's name, its entity and which change happened.
+  `present()` renders them and links to that table's list page in the workspace.
+- `DeleteTableLayout` and `UpdateTableLayout` send it, since an action owns its side effects.
+  `UpdateTableLayout` sends it only when `is_shared` turns false.
+- The actor is the Admin. `InboxNotification::shouldSend()` already skips a notice to its own
+  actor and one to a member who has left the workspace, so the owner's own changes send nothing.
+- In-app only, no email. A layout is low stakes, and the members who used it keep what their table
+  shows.
+
 Prove first: a render hook closure has no access to the page component. The control must still
 mount the page's actions and call `applySavedLayout()`. Settle how before building the menu.
 
@@ -296,6 +332,8 @@ Done when:
 - The permission rules below hold, each covered by a test.
 - Changing the table after applying a layout shows "(modified)"; Revert restores the layout; Save
   overwrites it.
+- An Admin who deletes or stops sharing a member's layout leaves one notice in that member's bell,
+  and the owner's own changes leave none.
 
 ### Phase 4: Column menu and reorder
 
