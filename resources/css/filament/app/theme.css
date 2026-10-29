@@ -447,6 +447,80 @@ html.fi-chat-docked .fi-app-main-wrapper {
     }
 }
 
+/* A saved layout's row highlights as one, its buttons included. */
+.fi-ta-layouts-row {
+    @apply relative flex items-center rounded-md;
+
+    &:hover,
+    &:has(:focus-visible) {
+        @apply bg-gray-50 dark:bg-white/5;
+    }
+
+    & > .fi-dropdown-list-item {
+        @apply bg-transparent!;
+    }
+}
+
+.fi-ta-layouts-row-meta {
+    @apply flex min-w-0 shrink-0 items-center gap-1.5 text-xs font-normal text-gray-500 dark:text-gray-400;
+}
+
+.fi-ta-layouts-row-default {
+    @apply flex shrink-0 text-warning-500;
+
+    & .fi-icon {
+        @apply size-3.5!;
+    }
+}
+
+/* The layout the table shows. A tint, unlike the gray hover, so the two never read alike. */
+.fi-ta-layouts-selected {
+    @apply bg-primary-50! dark:bg-primary-400/10!;
+}
+
+.fi-ta-layouts-row-actions {
+    @apply flex shrink-0 items-center gap-0.5 pe-1;
+
+    & .fi-icon-btn {
+        @apply m-0 size-6;
+    }
+
+    & .fi-icon-btn .fi-icon {
+        @apply size-4!;
+    }
+}
+
+.fi-ta-layouts-row-delete:hover {
+    @apply text-danger-600 dark:text-danger-400;
+}
+
+/* A pointer swaps the row's status for its buttons. Touch has no hover, so both stay in view there. */
+@media (hover: hover) {
+    .fi-ta-layouts-row-actions {
+        @apply pointer-events-none absolute inset-y-0 end-0 opacity-0;
+    }
+
+    .fi-ta-layouts-row:hover,
+    .fi-ta-layouts-row:has(:focus-visible),
+    .fi-ta-layouts-row:has([aria-expanded='true']) {
+        & .fi-ta-layouts-row-actions {
+            @apply pointer-events-auto opacity-100;
+        }
+
+        & .fi-ta-layouts-row-meta {
+            @apply hidden;
+        }
+
+        & > .fi-dropdown-list-item {
+            @apply pe-16;
+        }
+    }
+}
+
+.fi-ta-layouts-trigger-label {
+    @apply block max-w-56 truncate;
+}
+
 .fi-ta-layouts-save .fi-icon {
     @apply text-primary-600 dark:text-primary-400;
 }

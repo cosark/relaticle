@@ -9,10 +9,10 @@
 @endphp
 
 <div class="fi-ta-layouts" wire:key="{{ $this->getId() }}.table.layouts">
-    <x-filament::dropdown placement="bottom-start" width="xs" max-height="28rem">
+    <x-filament::dropdown placement="bottom-start" width="xs" max-height="28rem" shift>
         <x-slot name="trigger">
             <x-filament::button color="gray" size="sm" icon="heroicon-o-queue-list" class="fi-ta-layouts-trigger">
-                {{ $active?->name ?? __('filament/panel.tables.layouts.label') }}
+                <span class="fi-ta-layouts-trigger-label" @if ($active) title="{{ $active->name }}" @endif>{{ $active?->name ?? __('filament/panel.tables.layouts.label') }}</span>
 
                 @if ($isModified)
                     <span class="font-normal text-gray-500 dark:text-gray-400">{{ __('filament/panel.tables.layouts.modified') }}</span>
@@ -24,11 +24,21 @@
 
         <x-filament::dropdown.list>
             <x-filament::dropdown.list.item
-                :icon="$active ? 'heroicon-o-table-cells' : 'heroicon-m-check'"
+                icon="heroicon-o-table-cells"
                 :color="$active ? 'gray' : 'primary'"
+                :aria-current="$active ? null : 'true'"
+                class="{{ $active ? '' : 'fi-ta-layouts-selected' }}"
                 wire:click="useStandardTableLayout"
             >
-                {{ __('filament/panel.tables.layouts.standard') }}
+                <span class="flex items-center justify-between gap-3">
+                    <span class="truncate">{{ __('filament/panel.tables.layouts.standard') }}</span>
+
+                    <span class="fi-ta-layouts-row-meta">
+                        @if ($this->defaultTableLayoutId === null)
+                            <span role="img" aria-label="{{ __('filament/panel.tables.layouts.default') }}" class="fi-ta-layouts-row-default"><x-filament::icon icon="heroicon-s-star" /></span>
+                        @endif
+                    </span>
+                </span>
             </x-filament::dropdown.list.item>
         </x-filament::dropdown.list>
 
@@ -38,61 +48,88 @@
                     <p class="px-2 pt-1 pb-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
 
                     @foreach ($group as $layout)
-                        <x-filament::dropdown.list.item
-                            :icon="match (true) {
-                                $layout->is($active) => 'heroicon-m-check',
-                                $layout->user_id !== $userId => 'heroicon-o-user-group',
-                                default => 'heroicon-o-bookmark',
-                            }"
-                            :color="$layout->is($active) ? 'primary' : 'gray'"
-                            wire:click="applySavedLayout('{{ $layout->getKey() }}')"
-                        >
-                            <span class="flex items-center justify-between gap-3">
-                                <span class="truncate">{{ $layout->name }}</span>
+                        @php
+                            $layoutId = $layout->getKey();
+                            $isDefault = $layoutId === $this->defaultTableLayoutId;
+                            $canUpdateLayout = $this->canUpdateTableLayout($layout);
+                        @endphp
 
-                                @if ($layout->getKey() === $this->defaultTableLayoutId)
-                                    <x-filament::icon icon="heroicon-s-star" :size="\Filament\Support\Enums\IconSize::ExtraSmall" class="shrink-0 text-warning-500" :label="__('filament/panel.tables.layouts.default')" />
-                                @elseif ($layout->user_id !== $userId)
-                                    <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{{ $layout->user?->name }}</span>
+                        <div @class(['fi-ta-layouts-row', 'fi-ta-layouts-selected' => $layout->is($active)]) wire:key="{{ $this->getId() }}.table.layouts.{{ $layoutId }}">
+                            <x-filament::dropdown.list.item
+                                :icon="$layout->is_shared ? 'heroicon-o-user-group' : 'heroicon-o-bookmark'"
+                                :color="$layout->is($active) ? 'primary' : 'gray'"
+                                :aria-current="$layout->is($active) ? 'true' : null"
+                                class="min-w-0 flex-1"
+                                wire:click="applySavedLayout('{{ $layoutId }}')"
+                            >
+                                <span class="flex items-center justify-between gap-3">
+                                    <span class="truncate" title="{{ $layout->name }}">{{ $layout->name }}</span>
+
+                                    <span class="fi-ta-layouts-row-meta">
+                                        @if ($isDefault)
+                                            <span role="img" aria-label="{{ __('filament/panel.tables.layouts.default') }}" class="fi-ta-layouts-row-default"><x-filament::icon icon="heroicon-s-star" /></span>
+                                        @endif
+
+                                        @if ($layout->user_id !== $userId)
+                                            <span class="truncate">{{ $layout->user?->name }}</span>
+                                        @elseif ($layout->is_shared)
+                                            <span>{{ __('filament/panel.tables.layouts.shared_label') }}</span>
+                                        @endif
+                                    </span>
+                                </span>
+                            </x-filament::dropdown.list.item>
+
+                            <div class="fi-ta-layouts-row-actions">
+                                @if ($canUpdateLayout)
+                                    <x-filament::icon-button
+                                        icon="heroicon-o-trash"
+                                        color="gray"
+                                        size="sm"
+                                        class="fi-ta-layouts-row-delete"
+                                        :label="__('filament/panel.tables.layouts.delete')"
+                                        :tooltip="__('filament/panel.tables.layouts.delete')"
+                                        wire:click="mountAction('deleteTableLayout', { layout: '{{ $layoutId }}' })"
+                                    />
                                 @endif
-                            </span>
-                        </x-filament::dropdown.list.item>
+
+                                <x-filament::dropdown placement="bottom-end" width="2xs" teleport>
+                                    <x-slot name="trigger">
+                                        <x-filament::icon-button
+                                            icon="heroicon-m-ellipsis-vertical"
+                                            color="gray"
+                                            size="sm"
+                                            :label="__('filament/panel.tables.layouts.actions', ['name' => $layout->name])"
+                                        />
+                                    </x-slot>
+
+                                    <x-filament::dropdown.list>
+                                        @if ($canUpdateLayout)
+                                            <x-filament::dropdown.list.item icon="heroicon-o-pencil-square" wire:click="mountAction('renameTableLayout', { layout: '{{ $layoutId }}' })">
+                                                {{ __('filament/panel.tables.layouts.rename') }}
+                                            </x-filament::dropdown.list.item>
+
+                                            @if ($layout->is_shared)
+                                                <x-filament::dropdown.list.item icon="heroicon-o-user-group" wire:click="mountAction('stopSharingTableLayout', { layout: '{{ $layoutId }}' })">
+                                                    {{ __('filament/panel.tables.layouts.unshare') }}
+                                                </x-filament::dropdown.list.item>
+                                            @else
+                                                <x-filament::dropdown.list.item icon="heroicon-o-user-group" wire:click="mountAction('shareTableLayout', { layout: '{{ $layoutId }}' })">
+                                                    {{ __('filament/panel.tables.layouts.share') }}
+                                                </x-filament::dropdown.list.item>
+                                            @endif
+                                        @endif
+
+                                        <x-filament::dropdown.list.item icon="heroicon-o-star" wire:click="toggleDefaultTableLayout('{{ $layoutId }}')">
+                                            {{ $isDefault ? __('filament/panel.tables.layouts.unset_default') : __('filament/panel.tables.layouts.set_default') }}
+                                        </x-filament::dropdown.list.item>
+                                    </x-filament::dropdown.list>
+                                </x-filament::dropdown>
+                            </div>
+                        </div>
                     @endforeach
                 </x-filament::dropdown.list>
             @endif
         @endforeach
-
-        @if ($active)
-            <x-filament::dropdown.list>
-                <p class="truncate px-2 pt-1 pb-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">{{ $active->name }}</p>
-
-                @if ($canUpdate)
-                    <x-filament::dropdown.list.item icon="heroicon-o-pencil-square" wire:click="mountAction('renameTableLayout')">
-                        {{ __('filament/panel.tables.layouts.rename') }}
-                    </x-filament::dropdown.list.item>
-
-                    @if ($active->is_shared)
-                        <x-filament::dropdown.list.item icon="heroicon-o-user-group" wire:click="stopSharingTableLayout">
-                            {{ __('filament/panel.tables.layouts.unshare') }}
-                        </x-filament::dropdown.list.item>
-                    @else
-                        <x-filament::dropdown.list.item icon="heroicon-o-user-group" wire:click="mountAction('shareTableLayout')">
-                            {{ __('filament/panel.tables.layouts.share') }}
-                        </x-filament::dropdown.list.item>
-                    @endif
-                @endif
-
-                <x-filament::dropdown.list.item icon="heroicon-o-star" wire:click="toggleDefaultTableLayout">
-                    {{ $active->getKey() === $this->defaultTableLayoutId ? __('filament/panel.tables.layouts.unset_default') : __('filament/panel.tables.layouts.set_default') }}
-                </x-filament::dropdown.list.item>
-
-                @if ($canUpdate)
-                    <x-filament::dropdown.list.item icon="heroicon-o-trash" color="danger" wire:click="mountAction('deleteTableLayout')">
-                        {{ __('filament/panel.tables.layouts.delete') }}
-                    </x-filament::dropdown.list.item>
-                @endif
-            </x-filament::dropdown.list>
-        @endif
 
         <x-filament::dropdown.list>
             <x-filament::dropdown.list.item icon="heroicon-o-plus" wire:click="mountAction('saveTableLayoutAs')">
@@ -126,5 +163,17 @@
                 {{ __('filament/panel.tables.layouts.save') }}
             </x-filament::button>
         @endif
+
+        <x-filament::button
+            color="gray"
+            size="sm"
+            icon="heroicon-o-plus"
+            label-sr-only
+            :tooltip="__('filament/panel.tables.layouts.save_as')"
+            class="fi-ta-layouts-save-as"
+            wire:click="mountAction('saveTableLayoutAs')"
+        >
+            {{ __('filament/panel.tables.layouts.save_as') }}
+        </x-filament::button>
     @endif
 </div>
