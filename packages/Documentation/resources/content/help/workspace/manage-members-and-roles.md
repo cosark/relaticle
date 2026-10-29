@@ -40,6 +40,7 @@ API or MCP.
 | Manage billing | Yes | No | No | No |
 | Rename or delete the workspace | Yes | No | No | No |
 | View the activity log | Yes | Yes | No | No |
+| Edit and delete table layouts shared with the workspace | Yes | Yes | No | No |
 
 Admins manage members, custom fields, and workspace email settings alongside working with records. A
 few things stay with the **workspace owner** alone, whatever anyone's role:
