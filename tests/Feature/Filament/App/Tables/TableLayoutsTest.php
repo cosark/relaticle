@@ -455,6 +455,23 @@ it('offers save as new beside a modified layout, even one the member cannot save
         ->and($layout->refresh()->state->sort)->toBe('created_at:desc');
 });
 
+it('names the owner when an admin is about to delete someone else\'s layout', function (): void {
+    $owner = tableLayoutMember(WorkspaceRole::Member);
+    $theirs = layoutFor($owner, ['name' => 'Team', 'is_shared' => true]);
+    $admin = tableLayoutMember(WorkspaceRole::Admin);
+    $mine = layoutFor($admin, ['name' => 'Mine']);
+    $this->actingAs($admin);
+
+    livewire(ListCompanies::class)
+        ->mountAction('deleteTableLayout', ['layout' => $theirs->getKey()])
+        ->assertMountedActionModalSee("It belongs to {$owner->name}, who will be told you deleted it.");
+
+    livewire(ListCompanies::class)
+        ->mountAction('deleteTableLayout', ['layout' => $mine->getKey()])
+        ->assertMountedActionModalSee('Members who use this layout keep what their table shows.')
+        ->assertMountedActionModalDontSee('It belongs to');
+});
+
 it('confirms a deleted layout', function (): void {
     $layout = layoutFor($this->user, ['name' => 'Renewals']);
 

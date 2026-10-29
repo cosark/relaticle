@@ -186,7 +186,13 @@ trait HasTableLayouts
             ->color('danger')
             ->requiresConfirmation()
             ->modalHeading(fn (array $arguments): string => __('filament/panel.tables.layouts.delete_heading', ['name' => $this->argumentTableLayout($arguments)?->name]))
-            ->modalDescription(__('filament/panel.tables.layouts.delete_description'))
+            ->modalDescription(function (array $arguments): string {
+                $layout = $this->argumentTableLayout($arguments);
+
+                return $layout instanceof TableLayout && $layout->user_id !== $this->tableLayoutUser()->getKey()
+                    ? __('filament/panel.tables.layouts.delete_description_other', ['owner' => $layout->user?->name])
+                    : __('filament/panel.tables.layouts.delete_description');
+            })
             ->visible(fn (array $arguments): bool => $this->canUpdateArgumentTableLayout($arguments))
             ->action(function (array $arguments): void {
                 $layout = $this->argumentTableLayout($arguments) ?? abort(404);

@@ -58,6 +58,7 @@ return [
             'delete' => 'Delete layout',
             'delete_heading' => 'Delete ":name"?',
             'delete_description' => 'Members who use this layout keep what their table shows.',
+            'delete_description_other' => 'It belongs to :owner, who will be told you deleted it. Members who use it keep what their table shows.',
             'saved' => '":name" saved',
             'created' => '":name" saved as a new layout',
             'deleted' => '":name" deleted',
