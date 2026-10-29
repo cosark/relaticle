@@ -51,7 +51,7 @@
                                 <span class="truncate">{{ $layout->name }}</span>
 
                                 @if ($layout->getKey() === $this->defaultTableLayoutId)
-                                    <x-filament::icon icon="heroicon-s-star" class="size-4 shrink-0 text-warning-500" :label="__('filament/panel.tables.layouts.default')" />
+                                    <x-filament::icon icon="heroicon-s-star" :size="\Filament\Support\Enums\IconSize::ExtraSmall" class="shrink-0 text-warning-500" :label="__('filament/panel.tables.layouts.default')" />
                                 @elseif ($layout->user_id !== $userId)
                                     <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{{ $layout->user?->name }}</span>
                                 @endif
