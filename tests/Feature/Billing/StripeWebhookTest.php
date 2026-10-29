@@ -174,6 +174,8 @@ it('upgrades the workspace to Pro and grants the allowance when the subscription
 });
 
 it('does not re-reset usage when the same webhook is replayed', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     $workspace = stripeBillingWorkspace();
 
     sendStripeWebhook(stripeSubscriptionEvent($workspace, 'created'))->assertSuccessful();
@@ -1090,6 +1092,8 @@ it('replaces an older managed subscription for a workspace that once paid for Pr
 });
 
 it('grants nothing when a concurrent delivery switched the plan on first', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     $workspace = proWorkspaceAwaitingManagedPayment();
     stripeManagedSwitch($workspace);
 

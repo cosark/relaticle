@@ -207,6 +207,8 @@ it('anchors the target credit period on the original subscription start date', f
 });
 
 it('falls back the source credit period to the calendar month, not the moved subscription anchor', function (): void {
+    Feature::define(Billing::class, true);
+
     $this->travelTo(new DateTimeImmutable('2026-06-15 12:00:00', new DateTimeZone('UTC')));
 
     [$source, $target, $subscription] = transferPair();
