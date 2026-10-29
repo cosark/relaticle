@@ -39,4 +39,9 @@ final readonly class PlanEntitlements implements Entitlements
     {
         return $model->allowedForPlan($this->modelAccess->planFor($workspace));
     }
+
+    public function chatRateLimit(Workspace $workspace): int
+    {
+        return $workspace->plan->rateLimit();
+    }
 }

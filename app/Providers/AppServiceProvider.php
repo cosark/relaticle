@@ -613,7 +613,7 @@ final class AppServiceProvider extends ServiceProvider
                 return Limit::perMinute(Plan::default()->rateLimit())->by('chat-anon');
             }
 
-            return Limit::perMinute($workspace->plan->rateLimit())
+            return Limit::perMinute(resolve(Entitlements::class)->chatRateLimit($workspace))
                 ->by($workspace->getKey())
                 ->response(function (Request $request, array $headers) use ($workspace) {
                     ChatTelemetry::rateLimited(

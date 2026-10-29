@@ -24,4 +24,9 @@ final readonly class SelfHostedEntitlements implements Entitlements
     {
         return true;
     }
+
+    public function chatRateLimit(Workspace $workspace): int
+    {
+        return (int) config('chat.rate_limit_per_minute');
+    }
 }

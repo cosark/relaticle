@@ -14,4 +14,6 @@ interface Entitlements
     public function creditAllowance(Workspace $workspace): int;
 
     public function allowsModel(?Workspace $workspace, ModelDescriptor $model): bool;
+
+    public function chatRateLimit(Workspace $workspace): int;
 }

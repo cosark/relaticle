@@ -220,7 +220,9 @@ it('returns 403 when the user has no current workspace', function (): void {
 });
 
 it('rate-limits createConversation per workspace plan', function (): void {
+    Feature::define(Billing::class, true);
     $user = User::factory()->withPersonalWorkspace()->create();
+    $user->currentWorkspace->forceFill(['hosted_free_grandfathered_at' => now()])->save();
     actingAs($user);
 
     AiCreditBalance::query()->updateOrCreate(['workspace_id' => $user->currentWorkspace->getKey()], [

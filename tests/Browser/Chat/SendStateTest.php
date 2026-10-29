@@ -49,6 +49,8 @@ mutates(ChatInterface::class);
  */
 function chatWarmUpRateLimiter(AwaitableWebpage $page): void
 {
+    config()->set('chat.rate_limit_per_minute', 10);
+
     // 10 real sequential HTTP round trips through the in-process server, each
     // sharing this dev box's CPU with every other Horizon/Reverb worker across
     // sibling checkouts (chronic load average well above core count here). The
