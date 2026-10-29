@@ -142,15 +142,7 @@ body.resizing-column {
 /* Fixed, so the scrolling table cannot clip it. The script places it from the trigger.
    Filament transitions `display`, which keeps a closed menu on screen for the duration. */
 .fi-dropdown-panel.fi-ta-column-menu {
-    @apply fixed z-60 w-46 transition-none;
-}
-
-.fi-ta-column-menu .fi-dropdown-list-item {
-    @apply gap-1.5 px-2 py-1.5 text-xs/5;
-}
-
-.fi-ta-column-menu .fi-dropdown-list-item .fi-icon {
-    @apply size-4;
+    @apply fixed z-60 w-56 transition-none;
 }
 
 /* The dragged column's slot stays empty and travels with the drop position. */
