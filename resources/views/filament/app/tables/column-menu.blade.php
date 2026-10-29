@@ -1,8 +1,9 @@
 @php
     $items = [
-        ['group' => 'move', 'label' => __('filament/panel.tables.column_menu.move_left'), 'icon' => 'heroicon-m-arrow-left', 'run' => '$wire.moveTableColumn(column, before.left)', 'disabled' => '! canMoveLeft'],
-        ['group' => 'move', 'label' => __('filament/panel.tables.column_menu.move_right'), 'icon' => 'heroicon-m-arrow-right', 'run' => '$wire.moveTableColumn(column, before.right)', 'disabled' => '! canMoveRight'],
-        ['group' => 'hide', 'label' => __('filament/panel.tables.column_menu.hide'), 'icon' => 'heroicon-m-eye-slash', 'run' => '$wire.hideTableColumn(column)', 'show' => 'hideable'],
+        ['group' => 'move', 'label' => __('filament/panel.tables.column_menu.move_left'), 'icon' => 'heroicon-m-arrow-left', 'run' => '$wire.moveTableColumn(column, before.left)', 'disabled' => '! canMoveLeft', 'focus' => 'column'],
+        ['group' => 'move', 'label' => __('filament/panel.tables.column_menu.move_right'), 'icon' => 'heroicon-m-arrow-right', 'run' => '$wire.moveTableColumn(column, before.right)', 'disabled' => '! canMoveRight', 'focus' => 'column'],
+        ['group' => 'manage', 'label' => __('filament/panel.tables.column_menu.edit_label'), 'icon' => 'heroicon-o-tag', 'run' => "\$wire.mountAction('editTableColumnLabel', { column })", 'focus' => 'null'],
+        ['group' => 'manage', 'label' => __('filament/panel.tables.column_menu.hide'), 'icon' => 'heroicon-o-eye-slash', 'run' => '$wire.hideTableColumn(column)', 'visible' => 'hideable', 'focus' => 'neighbour'],
     ];
 @endphp
 
@@ -26,18 +27,21 @@
         class="fi-dropdown-panel fi-ta-column-menu"
     >
         @foreach (collect($items)->groupBy('group') as $group)
-            <div class="fi-dropdown-list" @isset($group->first()['show']) x-bind:style="{ display: {{ $group->first()['show'] }} ? null : 'none' }" @endisset>
+            <div class="fi-dropdown-list">
                 @foreach ($group as $item)
                     <button
                         type="button"
                         role="menuitem"
                         data-label="{{ $item['label'] }}"
+                        @isset($item['visible'])
+                            x-bind:style="{ display: {{ $item['visible'] }} ? null : 'none' }"
+                        @endisset
                         @isset($item['disabled'])
                             x-bind:disabled="{{ $item['disabled'] }}"
                             x-bind:aria-disabled="({{ $item['disabled'] }}).toString()"
                             x-bind:class="{ 'fi-disabled': {{ $item['disabled'] }} }"
                         @endisset
-                        x-on:click="choose(() => {{ $item['run'] }}, {{ $item['group'] === 'hide' ? 'neighbour' : 'column' }})"
+                        x-on:click="choose(() => {{ $item['run'] }}, {{ $item['focus'] }})"
                         class="fi-dropdown-list-item"
                     >
                         <x-filament::icon :icon="$item['icon']" class="fi-dropdown-list-item-icon" />

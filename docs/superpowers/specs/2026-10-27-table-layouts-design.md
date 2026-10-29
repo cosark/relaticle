@@ -299,45 +299,58 @@ Done when:
 
 ### Phase 4: Column menu and reorder
 
-Each header gets one handle that both drags the column and opens its menu. Both change state
-that phase 2 already saves, so this phase adds no storage.
+Each header gets an options button, and the header itself is dragged to reorder. Order and visibility
+are state phase 2 already saves. Column labels add one field to `TableStateData`, which is JSON,
+so this phase adds no migration.
 
 ![Drag grips on every header](assets/table-layouts/phase-4-header-grips.png)
 ![The column menu](assets/table-layouts/phase-4-column-menu.png)
 
-A `⋮⋮` handle appears at the header's right edge on hover and on keyboard focus. Clicking it
-opens a menu with Move left, Move right and Hide column. Dragging it reorders the column. Sorting
+Each header except the title column always shows a `⋮` options button at its right edge.
+Clicking it opens a menu with Move left and Move right, then Edit column label and Hide column.
+Pressing anywhere else on the header and dragging reorders the column. The cursor there is the
+move cursor, while the column name keeps the pointer cursor because a click on it still sorts:
+a press only becomes a drag past 4px, and the click that ends a drag never sorts. Filament's sort
+button is narrowed to the name so the rest of the header is free to grab. Dragging is off on
+touch screens, where a swipe keeps scrolling the table and the menu moves the column. Sorting
 stays on the header click and its chevron, so the menu does not repeat it. (The mockups show a
-separate grip and a `⋯` button, and a menu with the two sort items. One handle and a shorter menu
-replaced them after the first build.) The script adds the handle beside the resize handle. One
-menu per table, rendered through `TablesRenderHook::TOOLBAR_SEARCH_AFTER` for the five pages,
-opens under whichever handle was clicked. `TablesRenderHook::HEADER_CELL` was not used: it
+`⋯` button, a grip and a menu with the two sort items. A `⋮` button, a draggable header and a
+shorter menu replaced them after the first build.) The script adds the button beside the resize
+handle. One menu per table, rendered through `TablesRenderHook::TOOLBAR_SEARCH_AFTER` for the
+five pages, opens under whichever options button was clicked. `TablesRenderHook::HEADER_CELL` was not used: it
 replaces the whole `<th>`.
 
 ![Dragging a header: the column lifts while the others slide aside](assets/table-layouts/phase-4-drag-reorder.png)
 
-Dragging the handle lifts the column. Its slot stays empty and travels with the drop position while
+Dragging a header lifts the column. Its slot stays empty and travels with the drop position while
 the other columns slide aside, so the table shows the new order before the drop. (The mockup's
 drop line was replaced by this after the first build.) Holding the column near the table's left
 or right edge scrolls the table sideways. A drop anywhere over the table calls one Livewire
 method, `moveTableColumn()`, which reorders the column state through
 `applyTableColumnManager(..., wasReordered: true)`. Move left and Move right call the same
-method, and they are the keyboard path for reordering, as are the arrow keys on a focused handle.
+method, and they are the keyboard path for reordering, as are the arrow keys on a focused options button.
 
 - The drag lives in `resizable-columns.js`, beside the resize handles, so the two never fight
   over a mouse down on the header.
+- Edit column label opens a modal with one field, filled with the name the column shows now. It
+  renames the column for the member only: the header and the column manager show the new name,
+  and exports, filters and other members keep the original. The name is kept in table state and
+  in any layout saved from it, so applying a layout restores its labels and a changed label marks
+  the layout "(modified)". At most 60 characters. Saving it empty, or saving the original name,
+  removes the label. A label for a column the table no longer has is dropped on load.
 - Hide appears only on toggleable columns. Move left and Move right are disabled at the edges.
-- The title column (`CrmEntity::titleColumn()`) stays first: it has no handle, and nothing can be
-  dropped before it. The column manager can still drag it, because
+- The title column (`CrmEntity::titleColumn()`) stays first: it has no options button and does not drag, so it cannot be
+  moved, hidden or renamed, and nothing can be dropped before it. The column manager can still drag it, because
   Filament has no per-item lock, so `HasColumnMenu::applyTableColumnManager()` puts it back
   first on every apply, a stored order and a layout included.
 - Every label goes through `__()`.
 
 Done when:
 
-- Move and Hide from the menu, and a drag, each change the table and survive a reload.
+- Edit column label, Move and Hide from the menu, and a drag, each change the table and survive
+  a reload.
 - The column manager's order and the header order always agree.
-- The handle and its menu work by keyboard alone.
+- The options button and its menu work by keyboard alone.
 
 ### Phase 5: Pinned columns
 
@@ -349,7 +362,7 @@ scrolls sideways under them.
 ![The same in dark mode](assets/table-layouts/phase-5-pinned-dark.png)
 
 - The menu gains "Pin to left", shown as "Unpin" on a pinned column. A pinned header shows a
-  pushpin in place of the handle.
+  pushpin beside its name.
 - Pinned columns sit together at the left, after the selection checkbox, in pin order. Pinning
   moves a column there; unpinning returns it to the first unpinned position.
 - The title column stays first (phase 4). Pinning any column pins the title column first, and
@@ -430,6 +443,7 @@ rebuilt from stored JSON, which is the case `architecture.md` assigns to laravel
 | `grouping` | `"{group}:{direction}"` or null | 2 |
 | `perPage` | int or `"all"` | 2 |
 | `widths` | map of column to pixels; preferences only | 2 |
+| `labels` | map of column to the member's name for it, at most 60 characters; never the title column | 4 |
 | `pinned` | ordered list of column names | 5 |
 
 A field added later defaults to empty, so a row saved before it loads unchanged.

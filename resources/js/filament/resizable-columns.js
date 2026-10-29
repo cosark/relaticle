@@ -366,11 +366,8 @@ function moveTargets(th) {
     }
 }
 
-// A handle press only turns into a drag past this distance, so a click still opens the menu.
+// A header press only turns into a drag past this distance, so a click still sorts.
 const DRAG_THRESHOLD = 4
-
-// A release over the handle after a drag fires a click in the same task, which must not open the menu.
-let dragJustEnded = false
 // Within this distance of the scroll wrapper's edge, a drag scrolls the table sideways.
 const AUTO_SCROLL_EDGE = 48
 const AUTO_SCROLL_MAX_SPEED = 18
@@ -452,10 +449,25 @@ function clearShift(slots) {
     }))
 }
 
+// A press on a movable header drags it, except on its controls. Touch keeps swiping the table.
+function startHeaderDrag(event, th, wire) {
+    if (event.button !== 0 || event.pointerType === 'touch' || th.dataset.columnLocked === '1') return
+    if (event.target.closest('.fi-ta-column-handle, .column-resize-handle-bar')) return
+
+    startColumnDrag(event, th, wire)
+}
+
+// The press that ends a drag still clicks what it lands on, and a header click would sort.
+function swallowNextClick() {
+    const swallow = (clickEvent) => {
+        clickEvent.preventDefault()
+        clickEvent.stopPropagation()
+    }
+    window.addEventListener('click', swallow, { capture: true, once: true })
+    setTimeout(() => window.removeEventListener('click', swallow, true))
+}
+
 function startColumnDrag(event, th, wire) {
-    if (event.button !== 0) return
-    event.preventDefault()
-    event.stopPropagation()
 
     const table = th.closest('table')
     const wrapper = table.closest('.fi-ta-content-ctn')
@@ -499,6 +511,7 @@ function startColumnDrag(event, th, wire) {
 
         if (!ghost) {
             if (Math.abs(moveEvent.clientX - startX) < DRAG_THRESHOLD) return
+            window.getSelection()?.removeAllRanges()
             ghost = createDragGhost(th, source.elements.slice(1, 13))
             source.elements.forEach((element) => element.classList.add('fi-ta-column-dragging'))
             table.classList.add('fi-ta-reordering')
@@ -518,10 +531,7 @@ function startColumnDrag(event, th, wire) {
 
         if (!ghost) return
 
-        dragJustEnded = true
-        setTimeout(() => {
-            dragJustEnded = false
-        })
+        swallowNextClick()
         ghost.remove()
         source.elements.forEach((element) => element.classList.remove('fi-ta-column-dragging'))
         table.classList.remove('fi-ta-reordering')
@@ -535,7 +545,7 @@ function startColumnDrag(event, th, wire) {
 
         // The cells move in the page at once, so the server's re-render arrives with nothing left to change.
         moveColumnCells(source, others[index] ?? null, others.at(-1))
-        wire.moveTableColumn(headerName(th), others[index] ? headerName(others[index].th) : null)
+        wire.moveTableColumn(headerName(th), others[index] ? headerName(others[index].th) : null).catch(forgetColumnFocus)
     }
 
     const onUp = (upEvent) => {
@@ -640,6 +650,12 @@ function registerResizableColumn() {
             this.wrapHeaderLabel()
             this.createHandle()
             this.createColumnControls()
+
+            // Alpine re-runs init when the header's x-data changes, so the listener is bound once.
+            if (!this.column.reorderListenerBound) {
+                this.column.reorderListenerBound = true
+                this.column.addEventListener('pointerdown', (e) => startHeaderDrag(e, this.column, this.$wire))
+            }
         },
 
         createColumnControls() {
@@ -652,13 +668,10 @@ function registerResizableColumn() {
             handle.className = 'fi-ta-column-handle'
             handle.setAttribute('aria-label', window.filamentData?.columnOptionsLabel ?? '')
             handle.setAttribute('aria-haspopup', 'menu')
-            handle.title = window.filamentData?.columnHandleHint ?? ''
-            handle.addEventListener('pointerdown', (e) => startColumnDrag(e, this.column, this.$wire))
             handle.addEventListener('keydown', (e) => this.moveByKey(e))
             handle.addEventListener('click', (e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                if (dragJustEnded) return
                 window.dispatchEvent(new CustomEvent('column-menu-open', {
                     detail: {
                         column: columnName,
