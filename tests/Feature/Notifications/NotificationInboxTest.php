@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Actions\Notifications\ArchiveNotification;
 use App\Actions\Task\NotifyTaskAssignees;
+use App\Enums\CrmEntity;
 use App\Enums\Notifications\NotificationReason;
 use App\Features\EmailIntegration;
 use App\Features\OnboardSeed;
@@ -13,6 +14,8 @@ use App\Models\Notification;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Notifications\TableLayoutChangedNotification;
+use App\Support\CanonicalRecordUrl;
 use App\Support\CurrentWorkspace;
 use Carbon\CarbonImmutable;
 use Filament\Actions\Action;
@@ -612,4 +615,31 @@ it('renders shared email rows without per-row queries beyond the synced copy che
 
     expect($withFifty->reject($isSyncedCopyCheck))->toHaveCount($withFive->reject($isSyncedCopyCheck)->count())
         ->and($withFifty->filter($isSyncedCopyCheck))->toHaveCount(100);
+});
+
+it('shows the owner who deleted their layout and links to the table', function (): void {
+    $admin = User::factory()->create(['name' => 'Dana Whitfield']);
+    $this->workspaceA->users()->attach($admin, ['role' => 'admin']);
+
+    $this->user->notify(new TableLayoutChangedNotification($this->workspaceA, $admin, 'Renewals', CrmEntity::Company, TableLayoutChangedNotification::DELETED));
+
+    Livewire::actingAs($this->user)->test(AppDatabaseNotifications::class)
+        ->assertSeeText('Dana Whitfield deleted your layout')
+        ->assertSeeText('Renewals')
+        ->assertSeeText('It was on the companies table.')
+        ->assertSeeText('Open Companies')
+        ->assertSee(resolve(CanonicalRecordUrl::class)->listUrl(CrmEntity::Company, $this->workspaceA));
+});
+
+it('shows a layout notice whose actor has since been deleted', function (): void {
+    $admin = User::factory()->create();
+    $this->workspaceA->users()->attach($admin, ['role' => 'admin']);
+
+    $this->user->notify(new TableLayoutChangedNotification($this->workspaceA, $admin, 'Renewals', CrmEntity::Company, TableLayoutChangedNotification::UNSHARED));
+    $admin->delete();
+
+    Livewire::actingAs($this->user)->test(AppDatabaseNotifications::class)
+        ->assertSeeText('is no longer shared')
+        ->assertDontSeeText('stopped sharing your layout')
+        ->assertSeeText('It is private to you again on the companies table.');
 });
