@@ -179,3 +179,23 @@ it('keeps Pro-only models out of the picker for a billing-on Free workspace', fu
 
     expect($state['allowedModels'])->not->toContain('claude-opus-5');
 });
+
+it('leaves the plan label out of the chat on a self-hosted install', function (): void {
+    Feature::define(Billing::class, false);
+
+    expect(html_entity_decode(Livewire::test(ChatInterface::class)->html()))->toContain('currentPlanLabel: null');
+});
+
+it('leaves the plan label out of the dashboard composer on a self-hosted install', function (): void {
+    Feature::define(Billing::class, false);
+
+    expect(html_entity_decode(livewire(Dashboard::class)->html()))->toContain('currentPlanLabel: null');
+});
+
+it('keeps the plan label in the chat when billing is on', function (): void {
+    Feature::define(Billing::class, true);
+
+    expect(html_entity_decode(Livewire::test(ChatInterface::class)->html()))
+        ->toContain("currentPlanLabel: '".Plan::Free->getLabel()."'")
+        ->not->toContain('currentPlanLabel: null');
+});

@@ -2,7 +2,7 @@
 title: AI credits and rate limits
 description: How assistant messages spend credits, what each plan includes monthly, and what happens at zero.
 order: 4
-updated: "2026-10-26"
+updated: "2026-10-29"
 related: [help/ai-assistant/choose-an-ai-model, help/workspace/billing-and-plans]
 ---
 
@@ -26,7 +26,7 @@ final cost settles after the answer completes.
 | Cloud Pro and its trial | 2,000 | 30 |
 | Cloud Concierge | 5,000 | 30 |
 | Enterprise | Agreed with your team | Agreed with your team |
-| Self-hosted (default) | 300 | 10 |
+| Self-hosted | Not metered | 60, set by `CHAT_RATE_LIMIT_PER_MINUTE` |
 
 Relaticle Cloud has no free plan; what each plan costs is in
 [Billing and plans](/help/workspace/billing-and-plans).

@@ -537,6 +537,6 @@ it('keeps the credits help article in step with each plan allowance', function (
         'Cloud Pro and its trial' => ['Cloud Pro and its trial', number_format(Plan::Pro->credits()), (string) Plan::Pro->rateLimit()],
         'Cloud Concierge' => ['Cloud Concierge', number_format(Plan::Concierge->credits()), (string) Plan::Concierge->rateLimit()],
         'Enterprise' => ['Enterprise', 'Agreed with your team', 'Agreed with your team'],
-        'Self-hosted (default)' => ['Self-hosted (default)', number_format(Plan::default()->credits()), (string) Plan::default()->rateLimit()],
+        'Self-hosted' => ['Self-hosted', 'Not metered', config('chat.rate_limit_per_minute').', set by CHAT_RATE_LIMIT_PER_MINUTE'],
     ]);
 });

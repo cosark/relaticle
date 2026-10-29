@@ -4,7 +4,11 @@
      $persistSelection: whether picking a model writes chat:model to
      localStorage (the full chat persists, the dashboard does not). --}}
 currentPlan: @js(auth()->user()?->currentWorkspace?->plan?->value ?? \App\Enums\Plan::default()->value),
-currentPlanLabel: @js(auth()->user()?->currentWorkspace?->plan?->getLabel() ?? \App\Enums\Plan::default()->getLabel()),
+currentPlanLabel: @js(
+    (auth()->user()?->currentWorkspace !== null && ! resolve(\App\Contracts\Entitlements::class)->metersCredits(auth()->user()->currentWorkspace))
+        ? null
+        : (auth()->user()?->currentWorkspace?->plan?->getLabel() ?? \App\Enums\Plan::default()->getLabel())
+),
 {{-- Null when billing is off, no tenant is bound, or the viewer cannot reach
      Billing: the locked-model hint then renders without a link. --}}
 upgradeUrl: @js(
