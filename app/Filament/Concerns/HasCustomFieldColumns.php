@@ -6,6 +6,7 @@ namespace App\Filament\Concerns;
 
 use App\Enums\CrmEntity;
 use App\Filament\Components\Tables\ColumnHeaderLabel;
+use App\Filament\Tables\Concerns\HasColumnMenu;
 use App\Filament\Tables\Concerns\HasResizableColumns;
 use App\Filament\Tables\Concerns\HasTableLayouts;
 use App\Filament\Tables\Concerns\PersistsTableState;
@@ -19,6 +20,7 @@ use Relaticle\CustomFields\Facades\CustomFields;
 
 trait HasCustomFieldColumns
 {
+    use HasColumnMenu;
     use HasResizableColumns;
     use HasTableLayouts;
     use PersistsTableState;

@@ -32,6 +32,13 @@ return [
     'tables' => [
         'resize_column' => 'Resize column',
         'resize_column_hint' => 'Drag to resize. Double-click to fit.',
+        'column_menu' => [
+            'options' => 'Column options',
+            'handle_hint' => 'Drag to reorder. Click for options.',
+            'move_left' => 'Move left',
+            'move_right' => 'Move right',
+            'hide' => 'Hide column',
+        ],
         'layouts' => [
             'label' => 'Layouts',
             'modified' => '(modified)',

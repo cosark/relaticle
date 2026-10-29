@@ -27,6 +27,23 @@
     overflow: hidden;
 }
 
+/* Each cell owns its borders, so a divider travels with a column that slides. Rows cannot draw
+   borders in this model, so Filament's row lines move onto the cells. */
+.fi-ta-resizable-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.fi-ta-resizable-table > thead > tr > th,
+.fi-ta-resizable-table > tbody > tr:not(:last-child) > td {
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.dark .fi-ta-resizable-table > thead > tr > th,
+.dark .fi-ta-resizable-table > tbody > tr:not(:last-child) > td {
+    border-bottom-color: color-mix(in oklab, var(--color-white) 5%, transparent);
+}
+
 /* A cell clips its overflow only when it is positioned. */
 .fi-ta-resizable-table td {
     position: relative;
@@ -161,4 +178,145 @@ body.resizing-column * {
 
 body.resizing-column {
     user-select: none;
+}
+
+/* One handle at the header's right edge, left of the resize handle: drag to reorder, click for
+   the menu. Its space stays reserved, so the label does not reflow when it appears. */
+.fi-ta-resizable-header:has(> .fi-ta-column-handle) > .fi-ta-resizable-label {
+    padding-right: 1.5rem;
+}
+
+.fi-ta-column-handle {
+    position: absolute;
+    top: 50%;
+    right: 0.5rem;
+    display: grid;
+    place-items: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.25rem;
+    color: var(--gray-400);
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+    opacity: 0;
+    transform: translateY(-50%);
+    z-index: 11;
+}
+
+.fi-ta-column-handle::before {
+    content: "";
+    width: 1rem;
+    height: 1rem;
+    background-color: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='6' cy='4' r='1.2'/%3E%3Ccircle cx='10' cy='4' r='1.2'/%3E%3Ccircle cx='6' cy='8' r='1.2'/%3E%3Ccircle cx='10' cy='8' r='1.2'/%3E%3Ccircle cx='6' cy='12' r='1.2'/%3E%3Ccircle cx='10' cy='12' r='1.2'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='6' cy='4' r='1.2'/%3E%3Ccircle cx='10' cy='4' r='1.2'/%3E%3Ccircle cx='6' cy='8' r='1.2'/%3E%3Ccircle cx='10' cy='8' r='1.2'/%3E%3Ccircle cx='6' cy='12' r='1.2'/%3E%3Ccircle cx='10' cy='12' r='1.2'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.fi-ta-resizable-header:hover > .fi-ta-column-handle,
+.fi-ta-column-handle:focus-visible,
+.fi-ta-column-handle[aria-expanded="true"] {
+    opacity: 1;
+}
+
+.fi-ta-column-handle:hover,
+.fi-ta-column-handle:focus-visible,
+.fi-ta-column-handle[aria-expanded="true"] {
+    color: var(--gray-700);
+    background-color: var(--gray-200);
+    outline: none;
+}
+
+.dark .fi-ta-column-handle:hover,
+.dark .fi-ta-column-handle:focus-visible,
+.dark .fi-ta-column-handle[aria-expanded="true"] {
+    color: var(--gray-200);
+    background-color: var(--gray-700);
+}
+
+/* Fixed, so the scrolling table cannot clip it. The script places it from the trigger. */
+.fi-dropdown-panel.fi-ta-column-menu {
+    position: fixed;
+    width: 13rem;
+    z-index: 60;
+    /* Filament transitions `display`, which keeps a closed menu on screen for the duration. */
+    transition: none;
+}
+
+/* The dragged column's slot stays empty and travels with the drop position. */
+.fi-ta-resizable-table .fi-ta-column-dragging {
+    background-color: var(--gray-100);
+}
+
+.dark .fi-ta-resizable-table .fi-ta-column-dragging {
+    background-color: var(--gray-800);
+}
+
+.fi-ta-resizable-table .fi-ta-column-dragging > * {
+    visibility: hidden;
+}
+
+/* While a column is dragged, the others slide aside to show where it lands. */
+.fi-ta-resizable-table.fi-ta-reordering td,
+.fi-ta-resizable-table.fi-ta-reordering thead th.fi-ta-resizable-header {
+    transition: transform 150ms ease;
+}
+
+.fi-ta-column-drag-ghost {
+    position: fixed;
+    overflow: hidden;
+    border-radius: 0.5rem;
+    background-color: white;
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.2), 0 0 0 1px rgb(0 0 0 / 0.06);
+    font-size: 0.875rem;
+    color: var(--gray-950);
+    z-index: 61;
+    pointer-events: none;
+}
+
+.dark .fi-ta-column-drag-ghost {
+    background-color: var(--gray-900);
+    color: white;
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+
+.fi-ta-column-drag-ghost-header,
+.fi-ta-column-drag-ghost-cell {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    padding: 0 0.75rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fi-ta-column-drag-ghost-header {
+    font-weight: 600;
+    background-color: var(--gray-50);
+}
+
+.dark .fi-ta-column-drag-ghost-header {
+    background-color: var(--gray-800);
+}
+
+.fi-ta-column-drag-ghost-cell {
+    border-top: 1px solid var(--gray-200);
+}
+
+.dark .fi-ta-column-drag-ghost-cell {
+    border-top-color: var(--gray-700);
+}
+
+body.reordering-column,
+body.reordering-column * {
+    cursor: grabbing !important;
+    user-select: none;
+}
+
+/* Headers passing under the pointer mid-drag must not light up a resize handle. */
+body.reordering-column .column-resize-handle-bar::before {
+    width: 0 !important;
 }

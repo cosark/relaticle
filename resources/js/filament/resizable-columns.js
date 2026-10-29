@@ -248,7 +248,7 @@ let morphHookRegistered = false
 
 // A morph keeps the server-rendered widths but strips the table class, the lock flag, the
 // label wrappers and the handles, so every resizable table is rebuilt from its headers.
-function rebuildResizableTablesAfterMorph() {
+function rebuildResizableTablesAfterMorph({ el } = {}) {
     const tables = new Set()
     document.querySelectorAll('thead th[x-data^="resizableColumn"]').forEach((th) => {
         const table = th.closest('table.fi-ta-table')
@@ -259,6 +259,9 @@ function rebuildResizableTablesAfterMorph() {
         delete table.dataset.resizableLayoutLocked
         lockTable(table)
         table.querySelectorAll('thead th[x-data^="resizableColumn"]').forEach(reapplyHeader)
+
+        // Other components morph too, and only the table's own morph has rebuilt its headers.
+        if (el?.contains(table)) restoreColumnFocus(table)
 
         const wrapper = table.closest('.fi-ta-content-ctn')
         const savedScrollLeft = wrapper && wrapperScrollLeft.get(wrapper)
@@ -298,7 +301,7 @@ function reapplyHeader(th) {
         const wrapper = document.createElement('span')
         wrapper.className = 'fi-ta-resizable-label'
         Array.from(th.childNodes).forEach((node) => {
-            if (node.nodeType === 1 && node.classList?.contains('column-resize-handle-bar')) return
+            if (node.nodeType === 1 && (node.classList?.contains('column-resize-handle-bar') || node.classList?.contains('fi-ta-column-handle'))) return
             wrapper.appendChild(node)
         })
         th.insertBefore(wrapper, th.firstChild)
@@ -306,12 +309,314 @@ function reapplyHeader(th) {
     if (!th.querySelector('.column-resize-handle-bar')) {
         window.Alpine?.$data?.(th)?.createHandle?.()
     }
+    if (!th.querySelector('.fi-ta-column-handle')) {
+        window.Alpine?.$data?.(th)?.createColumnControls?.()
+    }
+}
+
+// A move re-renders the headers, so the control that started it is focused again afterwards.
+let pendingColumnFocus = null
+
+function rememberColumnFocus(column) {
+    pendingColumnFocus = column
+}
+
+function forgetColumnFocus() {
+    pendingColumnFocus = null
+}
+
+function restoreColumnFocus(table) {
+    if (!pendingColumnFocus) return
+    const handle = columnHandle(table, pendingColumnFocus)
+    if (!handle) return
+    handle.focus()
+    pendingColumnFocus = null
+}
+
+// A morph strips and rebuilds the header handles, so a handle is found again by its column.
+function columnHandle(table, column) {
+    const th = headersOf(table).find((header) => headerName(header) === column)
+
+    return th?.querySelector('.fi-ta-column-handle') ?? null
+}
+
+function headersOf(table) {
+    return [...table.querySelectorAll('thead th[x-data^="resizableColumn"]')]
+}
+
+function headerName(th) {
+    return th ? window.Alpine?.$data?.(th)?.columnName ?? null : null
+}
+
+// The title column stays first, so nothing moves into or before its slot.
+function moveTargets(th) {
+    const headers = headersOf(th.closest('table'))
+    const index = headers.indexOf(th)
+    const left = headers[index - 1]
+
+    return {
+        canMoveLeft: left !== undefined && left.dataset.columnLocked !== '1',
+        canMoveRight: index < headers.length - 1,
+        before: {
+            left: left ? headerName(left) : null,
+            right: headers[index + 2] ? headerName(headers[index + 2]) : null,
+        },
+        // Where focus goes when this column is hidden: a neighbour that has a handle.
+        neighbour: headerName(left?.dataset.columnLocked === '1' ? headers[index + 1] ?? left : left ?? headers[index + 1]),
+    }
+}
+
+// A handle press only turns into a drag past this distance, so a click still opens the menu.
+const DRAG_THRESHOLD = 4
+
+// A release over the handle after a drag fires a click in the same task, which must not open the menu.
+let dragJustEnded = false
+// Within this distance of the scroll wrapper's edge, a drag scrolls the table sideways.
+const AUTO_SCROLL_EDGE = 48
+const AUTO_SCROLL_MAX_SPEED = 18
+
+function createDragGhost(th, cells) {
+    const ghost = document.createElement('div')
+    ghost.className = 'fi-ta-column-drag-ghost'
+    ghost.style.width = `${th.offsetWidth}px`
+
+    const header = document.createElement('div')
+    header.className = 'fi-ta-column-drag-ghost-header'
+    header.textContent = th.querySelector('.fi-ta-resizable-label')?.textContent.trim() ?? ''
+    header.style.height = `${th.offsetHeight}px`
+    ghost.appendChild(header)
+
+    // Each row takes its source cell's height, so the lifted column stays level with the table.
+    cells.forEach((cell) => {
+        const row = document.createElement('div')
+        row.className = 'fi-ta-column-drag-ghost-cell'
+        row.textContent = cell.textContent.trim()
+        row.style.height = `${cell.offsetHeight}px`
+        ghost.appendChild(row)
+    })
+
+    document.body.appendChild(ghost)
+
+    return ghost
+}
+
+// Slots keep the layout from before the drag, so the shifted columns never feed back into the target.
+function columnSlots(table) {
+    return headersOf(table).map((th) => ({
+        th,
+        left: th.offsetLeft,
+        width: th.offsetWidth,
+        elements: [th, ...table.querySelectorAll(`.fi-ta-cell-${CSS.escape(th.dataset.resizableColumnId)}`)],
+    }))
+}
+
+// A neighbour swaps once the dragged column's leading edge passes its middle, the same distance either way.
+// The title column keeps the first place.
+function dropIndex(slots, source, left) {
+    const right = left + source.width
+    const start = slots.indexOf(source)
+    const middle = (slot) => slot.left + slot.width / 2
+    const before = slots.slice(0, start).filter((slot) => middle(slot) < left).length
+    const after = slots.slice(start + 1).filter((slot) => middle(slot) < right).length
+    const locked = slots.findIndex((slot) => slot.th.dataset.columnLocked === '1')
+
+    return Math.max(before + after, locked + 1)
+}
+
+function shiftColumns(slots, source, index) {
+    const order = slots.filter((slot) => slot !== source)
+    order.splice(index, 0, source)
+
+    let left = slots[0].left
+    order.forEach((slot) => {
+        const shift = left - slot.left
+        slot.elements.forEach((element) => {
+            element.style.transform = shift ? `translateX(${shift}px)` : ''
+        })
+        left += slot.width
+    })
+}
+
+function moveColumnCells(source, target, last) {
+    source.elements.forEach((element) => {
+        const row = element.parentElement
+        const anchor = (target ?? last).elements.find((cell) => cell.parentElement === row)
+        if (!anchor) return
+        target ? row.insertBefore(element, anchor) : anchor.after(element)
+    })
+}
+
+function clearShift(slots) {
+    slots.forEach((slot) => slot.elements.forEach((element) => {
+        element.style.transform = ''
+    }))
+}
+
+function startColumnDrag(event, th, wire) {
+    if (event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    const table = th.closest('table')
+    const wrapper = table.closest('.fi-ta-content-ctn')
+    const slots = columnSlots(table)
+    const source = slots.find((slot) => slot.th === th)
+    const others = slots.filter((slot) => slot !== source)
+    const startIndex = slots.indexOf(source)
+    const grabOffset = event.clientX - th.getBoundingClientRect().left
+    const startX = event.clientX
+    let ghost = null
+    let index = startIndex
+    let pointer = { x: event.clientX, y: event.clientY }
+    let scrollFrame = null
+
+    const update = () => {
+        Object.assign(ghost.style, { left: `${pointer.x - grabOffset}px`, top: `${table.tHead.getBoundingClientRect().top}px` })
+        index = dropIndex(slots, source, pointer.x - grabOffset - table.getBoundingClientRect().left)
+        shiftColumns(slots, source, index)
+    }
+
+    const autoScroll = () => {
+        scrollFrame = null
+        if (!ghost || !wrapper) return
+
+        const box = wrapper.getBoundingClientRect()
+        const towardsLeft = AUTO_SCROLL_EDGE - (pointer.x - box.left)
+        const towardsRight = AUTO_SCROLL_EDGE - (box.right - pointer.x)
+        const pressure = Math.max(towardsLeft, towardsRight)
+        if (pressure <= 0) return
+
+        const before = wrapper.scrollLeft
+        wrapper.scrollLeft += Math.sign(towardsRight - towardsLeft) * Math.ceil(AUTO_SCROLL_MAX_SPEED * Math.min(1, pressure / AUTO_SCROLL_EDGE))
+        if (wrapper.scrollLeft === before) return
+
+        update()
+        scrollFrame = requestAnimationFrame(autoScroll)
+    }
+
+    const onMove = (moveEvent) => {
+        pointer = { x: moveEvent.clientX, y: moveEvent.clientY }
+
+        if (!ghost) {
+            if (Math.abs(moveEvent.clientX - startX) < DRAG_THRESHOLD) return
+            ghost = createDragGhost(th, source.elements.slice(1, 13))
+            source.elements.forEach((element) => element.classList.add('fi-ta-column-dragging'))
+            table.classList.add('fi-ta-reordering')
+            document.body.classList.add('reordering-column')
+        }
+
+        update()
+        scrollFrame ??= requestAnimationFrame(autoScroll)
+    }
+
+    const finish = (shouldDrop) => {
+        document.removeEventListener('pointermove', onMove)
+        document.removeEventListener('pointerup', onUp)
+        document.removeEventListener('pointercancel', onCancel)
+        document.removeEventListener('keydown', onKey)
+        if (scrollFrame) cancelAnimationFrame(scrollFrame)
+
+        if (!ghost) return
+
+        dragJustEnded = true
+        setTimeout(() => {
+            dragJustEnded = false
+        })
+        ghost.remove()
+        source.elements.forEach((element) => element.classList.remove('fi-ta-column-dragging'))
+        table.classList.remove('fi-ta-reordering')
+        document.body.classList.remove('reordering-column')
+        clearShift(slots)
+
+        const box = (wrapper ?? table).getBoundingClientRect()
+        const insideTable = pointer.x >= box.left && pointer.x <= box.right && pointer.y >= box.top && pointer.y <= table.getBoundingClientRect().bottom
+
+        if (!shouldDrop || !insideTable || index === startIndex) return
+
+        // The cells move in the page at once, so the server's re-render arrives with nothing left to change.
+        moveColumnCells(source, others[index] ?? null, others.at(-1))
+        wire.moveTableColumn(headerName(th), others[index] ? headerName(others[index].th) : null)
+    }
+
+    const onUp = (upEvent) => {
+        pointer = { x: upEvent.clientX, y: upEvent.clientY }
+        finish(true)
+    }
+    const onCancel = () => finish(false)
+    const onKey = (keyEvent) => {
+        if (keyEvent.key === 'Escape') finish(false)
+    }
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onCancel)
+    document.addEventListener('keydown', onKey)
+}
+
+function registerColumnMenu() {
+    window.Alpine.data('tableColumnMenu', () => ({
+        column: null,
+        trigger: null,
+        panel: null,
+        hideable: false,
+        canMoveLeft: false,
+        canMoveRight: false,
+        before: { left: null, right: null },
+        neighbour: null,
+        top: 0,
+        right: 0,
+
+        open(detail) {
+            if (this.column === detail.column) {
+                this.close(true)
+
+                return
+            }
+
+            pendingColumnFocus = null
+            this.close(false)
+
+            // Placed by its right edge in the same update that shows it, so it never appears elsewhere first.
+            const rect = detail.trigger.getBoundingClientRect()
+            Object.assign(this, detail, { top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) })
+            this.trigger.setAttribute('aria-expanded', 'true')
+
+            this.$nextTick(() => this.items()[0]?.focus())
+        },
+
+        items() {
+            return [...this.panel.querySelectorAll('[role="menuitem"]')].filter((item) => !item.disabled && item.offsetParent !== null)
+        },
+
+        step(delta) {
+            const items = this.items()
+            const index = items.indexOf(document.activeElement)
+            items[(index + delta + items.length) % items.length]?.focus()
+        },
+
+        close(returnFocus) {
+            if (this.column === null) return
+            const trigger = this.trigger?.isConnected
+                ? this.trigger
+                : columnHandle(this.$el.closest('.fi-ta'), this.column)
+            trigger?.setAttribute('aria-expanded', 'false')
+            if (returnFocus) trigger?.focus()
+            this.column = null
+        },
+
+        choose(run, focusColumn) {
+            rememberColumnFocus(focusColumn)
+            Promise.resolve(run()).catch(forgetColumnFocus)
+            this.close(false)
+        },
+    }))
 }
 
 function registerResizableColumn() {
     ensureGlobalMorphHook()
     wireStickyHeaders()
     window.Alpine.data('resizableColumn', (columnName, columnId, min = 40, max = 1000) => ({
+        columnName,
         minWidth: min,
         maxWidth: max,
         tableSelector: '.fi-ta-table',
@@ -334,6 +639,50 @@ function registerResizableColumn() {
             lockTable(this.table)
             this.wrapHeaderLabel()
             this.createHandle()
+            this.createColumnControls()
+        },
+
+        createColumnControls() {
+            this.column.querySelector(':scope > .fi-ta-column-handle')?.remove()
+
+            if (this.column.dataset.columnLocked === '1') return
+
+            const handle = document.createElement('button')
+            handle.type = 'button'
+            handle.className = 'fi-ta-column-handle'
+            handle.setAttribute('aria-label', window.filamentData?.columnOptionsLabel ?? '')
+            handle.setAttribute('aria-haspopup', 'menu')
+            handle.title = window.filamentData?.columnHandleHint ?? ''
+            handle.addEventListener('pointerdown', (e) => startColumnDrag(e, this.column, this.$wire))
+            handle.addEventListener('keydown', (e) => this.moveByKey(e))
+            handle.addEventListener('click', (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (dragJustEnded) return
+                window.dispatchEvent(new CustomEvent('column-menu-open', {
+                    detail: {
+                        column: columnName,
+                        trigger: handle,
+                        hideable: this.column.dataset.columnHideable === '1',
+                        ...moveTargets(this.column),
+                    },
+                }))
+            })
+
+            this.column.appendChild(handle)
+        },
+
+        moveByKey(event) {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+            event.preventDefault()
+            event.stopPropagation()
+
+            const targets = moveTargets(this.column)
+            const isLeft = event.key === 'ArrowLeft'
+            if (isLeft ? !targets.canMoveLeft : !targets.canMoveRight) return
+
+            rememberColumnFocus(columnName)
+            this.$wire.moveTableColumn(columnName, isLeft ? targets.before.left : targets.before.right).catch(forgetColumnFocus)
         },
 
         wrapHeaderLabel() {
@@ -472,6 +821,8 @@ function registerResizableColumn() {
 
 if (window.Alpine && window.Alpine.version) {
     registerResizableColumn()
+    registerColumnMenu()
 } else {
     document.addEventListener('alpine:init', registerResizableColumn)
+    document.addEventListener('alpine:init', registerColumnMenu)
 }

@@ -90,8 +90,8 @@ it('applies columns, sort, filters, search and page size in one call', function 
         ->and((int) $component->get('tableRecordsPerPage'))->toBe(50)
         ->and($component->get('tableFilters.trashed.value'))->toEqual(0)
         ->and($component->instance()->getTableFiltersForm()->getRawState()['trashed']['value'])->toEqual(0)
-        ->and($component->get('tableColumns.0.name'))->toBe('created_at')
-        ->and($component->get('tableColumns.0.isToggled'))->toBeFalse()
+        ->and($component->get('tableColumns.1.name'))->toBe('created_at')
+        ->and($component->get('tableColumns.1.isToggled'))->toBeFalse()
         ->and($component->instance()->isTableLayoutModified())->toBeFalse()
         ->and(preferenceRow()->active_layout_id)->toBe($layout->getKey());
 })->with('layout list pages');
@@ -103,7 +103,7 @@ it('falls back to the default page size when a layout holds one the table does n
 });
 
 it('applies a sort through the grouping a layout names', function (): void {
-    $layout = layoutFor($this->user, ['state' => new TableStateData(sort: 'name:asc', search: null)]);
+    $layout = layoutFor($this->user, ['state' => new TableStateData(sort: 'name:asc')]);
 
     $component = livewire(ListCompanies::class)->set('tableSearch', 'acme')->set('tableSort', 'created_at:desc')->call('applySavedLayout', $layout->getKey());
 

@@ -299,35 +299,45 @@ Done when:
 
 ### Phase 4: Column menu and reorder
 
-Each header gets a drag grip and a menu. Both change state that phase 2 already saves, so this
-phase adds no storage.
+Each header gets one handle that both drags the column and opens its menu. Both change state
+that phase 2 already saves, so this phase adds no storage.
 
 ![Drag grips on every header](assets/table-layouts/phase-4-header-grips.png)
 ![The column menu](assets/table-layouts/phase-4-column-menu.png)
 
-A `⋯` button appears on a header on hover and on keyboard focus. Its menu holds Sort ascending
-and Sort descending, then Move left and Move right, then Hide column. A header click keeps
-sorting as today; the menu does not replace it.
+A `⋮⋮` handle appears at the header's right edge on hover and on keyboard focus. Clicking it
+opens a menu with Move left, Move right and Hide column. Dragging it reorders the column. Sorting
+stays on the header click and its chevron, so the menu does not repeat it. (The mockups show a
+separate grip and a `⋯` button, and a menu with the two sort items. One handle and a shorter menu
+replaced them after the first build.) The script adds the handle beside the resize handle. One
+menu per table, rendered through `TablesRenderHook::TOOLBAR_SEARCH_AFTER` for the five pages,
+opens under whichever handle was clicked. `TablesRenderHook::HEADER_CELL` was not used: it
+replaces the whole `<th>`.
 
-![Dragging a header: the column lifts and a line marks the drop point](assets/table-layouts/phase-4-drag-reorder.png)
+![Dragging a header: the column lifts while the others slide aside](assets/table-layouts/phase-4-drag-reorder.png)
 
-Dragging a grip lifts the column, leaves its slot empty, and draws a line at the drop point. A
-drop calls one Livewire method that reorders the column state through
+Dragging the handle lifts the column. Its slot stays empty and travels with the drop position while
+the other columns slide aside, so the table shows the new order before the drop. (The mockup's
+drop line was replaced by this after the first build.) Holding the column near the table's left
+or right edge scrolls the table sideways. A drop anywhere over the table calls one Livewire
+method, `moveTableColumn()`, which reorders the column state through
 `applyTableColumnManager(..., wasReordered: true)`. Move left and Move right call the same
-method, and they are the keyboard path for reordering.
+method, and they are the keyboard path for reordering, as are the arrow keys on a focused handle.
 
 - The drag lives in `resizable-columns.js`, beside the resize handles, so the two never fight
   over a mouse down on the header.
 - Hide appears only on toggleable columns. Move left and Move right are disabled at the edges.
-- The title column (`CrmEntity::titleColumn()`) stays first: it has no grip, no Move items and
-  no Hide, and nothing can be dropped before it.
+- The title column (`CrmEntity::titleColumn()`) stays first: it has no handle, and nothing can be
+  dropped before it. The column manager can still drag it, because
+  Filament has no per-item lock, so `HasColumnMenu::applyTableColumnManager()` puts it back
+  first on every apply, a stored order and a layout included.
 - Every label goes through `__()`.
 
 Done when:
 
-- Sort, Move and Hide from the menu, and a drag, each change the table and survive a reload.
+- Move and Hide from the menu, and a drag, each change the table and survive a reload.
 - The column manager's order and the header order always agree.
-- The menu and the grip work by keyboard alone.
+- The handle and its menu work by keyboard alone.
 
 ### Phase 5: Pinned columns
 
@@ -339,7 +349,7 @@ scrolls sideways under them.
 ![The same in dark mode](assets/table-layouts/phase-5-pinned-dark.png)
 
 - The menu gains "Pin to left", shown as "Unpin" on a pinned column. A pinned header shows a
-  pushpin in place of the grip.
+  pushpin in place of the handle.
 - Pinned columns sit together at the left, after the selection checkbox, in pin order. Pinning
   moves a column there; unpinning returns it to the first unpinned position.
 - The title column stays first (phase 4). Pinning any column pins the title column first, and
