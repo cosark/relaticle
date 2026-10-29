@@ -191,6 +191,12 @@ trait HasTableLayouts
         $layout = resolve(UpdateTableLayout::class)->execute($this->tableLayoutUser(), $layout, ['is_shared' => $isShared]);
         $this->visibleTableLayouts = null;
 
+        if ($this->tableLayoutUser()->cannot('view', $layout)) {
+            $this->activeTableLayoutId = null;
+            $this->appliedTableLayoutHash = null;
+            $this->defaultTableLayoutId = $this->defaultTableLayoutId === $layout->getKey() ? null : $this->defaultTableLayoutId;
+        }
+
         Notification::make()->success()->title(__($isShared ? 'filament/panel.tables.layouts.shared' : 'filament/panel.tables.layouts.unshared', ['name' => $layout->name]))->send();
     }
 

@@ -352,6 +352,23 @@ it('lets an admin rename and delete someone else\'s shared layout, but not see a
     expect(TableLayout::query()->withoutGlobalScopes()->whereKey($shared->getKey())->exists())->toBeFalse();
 });
 
+it('lets an admin who stops sharing someone else\'s layout keep working on the table', function (): void {
+    $layout = layoutFor(tableLayoutMember(WorkspaceRole::Member), ['name' => 'Team', 'is_shared' => true, 'state' => hotLeads()]);
+    $this->actingAs(tableLayoutMember(WorkspaceRole::Admin));
+
+    $component = livewire(ListCompanies::class)
+        ->call('applySavedLayout', $layout->getKey())
+        ->call('stopSharingTableLayout')
+        ->assertSet('activeTableLayoutId', null)
+        ->set('tableSort', 'name:asc')
+        ->call('revertTableLayout')
+        ->assertOk()
+        ->assertDontSeeText('(modified)');
+
+    expect($component->get('tableSort'))->toBe('name:asc')
+        ->and($layout->refresh()->is_shared)->toBeFalse();
+});
+
 it('lets the owner keep managing a layout after an admin edits it', function (): void {
     $layout = layoutFor($this->user, ['is_shared' => true]);
 
