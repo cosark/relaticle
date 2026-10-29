@@ -9,7 +9,7 @@
 @endphp
 
 <div class="fi-ta-layouts" wire:key="{{ $this->getId() }}.table.layouts">
-    <x-filament::dropdown placement="bottom-start" width="xs" max-height="28rem" shift>
+    <x-filament::dropdown placement="bottom-start" width="xs" shift>
         <x-slot name="trigger">
             <x-filament::button color="gray" size="sm" icon="heroicon-o-queue-list" class="fi-ta-layouts-trigger">
                 <span class="fi-ta-layouts-trigger-label" @if ($active) title="{{ $active->name }}" @endif>{{ $active?->name ?? __('filament/panel.tables.layouts.label') }}</span>
@@ -22,6 +22,15 @@
             </x-filament::button>
         </x-slot>
 
+        <div class="fi-ta-layouts-panel" x-data="{ query: '' }">
+        @if ($layouts->count() >= 7)
+            <label class="fi-ta-layouts-search">
+                <x-filament::icon icon="heroicon-o-magnifying-glass" />
+                <input type="search" x-model="query" x-on:keydown.stop placeholder="{{ __('filament/panel.tables.layouts.search') }}" aria-label="{{ __('filament/panel.tables.layouts.search') }}" />
+            </label>
+        @endif
+
+        <div class="fi-ta-layouts-scroll">
         <x-filament::dropdown.list>
             <x-filament::dropdown.list.item
                 icon="heroicon-o-table-cells"
@@ -45,7 +54,10 @@
         @foreach ([__('filament/panel.tables.layouts.mine') => $own, __('filament/panel.tables.layouts.shared_with_workspace') => $shared] as $heading => $group)
             @if ($group->isNotEmpty())
                 <x-filament::dropdown.list>
-                    <p class="px-2 pt-1 pb-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
+                    <p class="fi-ta-layouts-heading">
+                        <span>{{ $heading }}</span>
+                        <span class="fi-ta-layouts-pill">{{ __('filament/panel.tables.layouts.available', ['count' => $group->count()]) }}</span>
+                    </p>
 
                     @foreach ($group as $layout)
                         @php
@@ -54,7 +66,11 @@
                             $canUpdateLayout = $this->canUpdateTableLayout($layout);
                         @endphp
 
-                        <div @class(['fi-ta-layouts-row', 'fi-ta-layouts-selected' => $layout->is($active)]) wire:key="{{ $this->getId() }}.table.layouts.{{ $layoutId }}">
+                        <div
+                            @class(['fi-ta-layouts-row', 'fi-ta-layouts-selected' => $layout->is($active)])
+                            x-show="! query || @js(mb_strtolower($layout->name)).includes(query.toLowerCase())"
+                            wire:key="{{ $this->getId() }}.table.layouts.{{ $layoutId }}"
+                        >
                             <x-filament::dropdown.list.item
                                 :icon="$layout->is_shared ? 'heroicon-o-user-group' : 'heroicon-o-bookmark'"
                                 :color="$layout->is($active) ? 'primary' : 'gray'"
@@ -92,7 +108,7 @@
                                     />
                                 @endif
 
-                                <x-filament::dropdown placement="bottom-end" width="2xs" teleport>
+                                <x-filament::dropdown placement="bottom-end" width="fi-ta-layouts-row-menu" teleport>
                                     <x-slot name="trigger">
                                         <x-filament::icon-button
                                             icon="heroicon-m-ellipsis-vertical"
@@ -123,6 +139,14 @@
                                             {{ $isDefault ? __('filament/panel.tables.layouts.unset_default') : __('filament/panel.tables.layouts.set_default') }}
                                         </x-filament::dropdown.list.item>
                                     </x-filament::dropdown.list>
+
+                                    @if ($canUpdateLayout)
+                                        <x-filament::dropdown.list>
+                                            <x-filament::dropdown.list.item icon="heroicon-o-trash" color="danger" wire:click="mountAction('deleteTableLayout', { layout: '{{ $layoutId }}' })">
+                                                {{ __('filament/panel.tables.layouts.delete') }}
+                                            </x-filament::dropdown.list.item>
+                                        </x-filament::dropdown.list>
+                                    @endif
                                 </x-filament::dropdown>
                             </div>
                         </div>
@@ -131,11 +155,15 @@
             @endif
         @endforeach
 
+        </div>
+
         <x-filament::dropdown.list>
-            <x-filament::dropdown.list.item icon="heroicon-o-plus" wire:click="mountAction('saveTableLayoutAs')">
-                {{ __('filament/panel.tables.layouts.save_as') }}
-            </x-filament::dropdown.list.item>
+            <button type="button" class="fi-dropdown-list-item fi-ta-layouts-save-current" wire:click="mountAction('saveTableLayoutAs')">
+                <x-filament::icon icon="heroicon-m-plus" />
+                {{ __('filament/panel.tables.layouts.save_current') }}
+            </button>
         </x-filament::dropdown.list>
+        </div>
     </x-filament::dropdown>
 
     @if ($isModified)

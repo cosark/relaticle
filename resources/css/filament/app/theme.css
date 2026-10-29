@@ -490,6 +490,10 @@ html.fi-chat-docked .fi-app-main-wrapper {
     }
 }
 
+.fi-ta-layouts-row-menu {
+    @apply max-w-56!;
+}
+
 .fi-ta-layouts-row-delete:hover {
     @apply text-danger-600 dark:text-danger-400;
 }
@@ -514,6 +518,44 @@ html.fi-chat-docked .fi-app-main-wrapper {
         & > .fi-dropdown-list-item {
             @apply pe-16;
         }
+    }
+}
+
+/* Search and Save stay in view; only the layouts between them scroll. */
+.fi-ta-layouts-panel {
+    @apply flex max-h-112 flex-col p-1;
+}
+
+.fi-ta-layouts-scroll {
+    @apply min-h-0 flex-1 overflow-y-auto;
+}
+
+.fi-ta-layouts-search {
+    @apply mb-1 flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-gray-400 ring-1 ring-gray-950/10 dark:text-gray-500 dark:ring-white/10;
+
+    & .fi-icon {
+        @apply size-4!;
+    }
+
+    & input {
+        @apply min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-gray-950 outline-none placeholder:text-gray-400 focus:ring-0 dark:text-white dark:placeholder:text-gray-500;
+    }
+}
+
+.fi-ta-layouts-heading {
+    @apply flex items-center justify-between gap-2 px-2 pt-1 pb-0.5 text-xs font-medium text-gray-500 dark:text-gray-400;
+}
+
+.fi-ta-layouts-pill {
+    @apply shrink-0 rounded-md bg-gray-100 px-1.5 text-xs font-medium text-gray-600 dark:bg-white/10 dark:text-gray-300;
+}
+
+/* An outline, not a border, so the dashed row is exactly as tall as the rows above it. */
+.fi-ta-layouts-save-current {
+    @apply justify-center text-gray-500 outline-1 -outline-offset-1 outline-gray-300 outline-dashed hover:text-gray-700 hover:outline-gray-400 dark:text-gray-400 dark:outline-white/15 dark:hover:text-gray-200 dark:hover:outline-white/25;
+
+    & .fi-icon {
+        @apply size-4!;
     }
 }
 

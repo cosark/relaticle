@@ -455,6 +455,16 @@ it('offers save as new beside a modified layout, even one the member cannot save
         ->and($layout->refresh()->state->sort)->toBe('created_at:desc');
 });
 
+it('offers a search box only once a member has seven layouts to choose from', function (): void {
+    TableLayout::factory()->for($this->user)->for($this->workspace)->count(6)->sequence(fn ($sequence): array => ['name' => "Layout {$sequence->index}"])->create();
+
+    livewire(ListCompanies::class)->assertDontSeeHtml('placeholder="Search layouts"');
+
+    layoutFor($this->user, ['name' => 'Seventh']);
+
+    livewire(ListCompanies::class)->assertSeeHtml('placeholder="Search layouts"');
+});
+
 it('names the owner when an admin is about to delete someone else\'s layout', function (): void {
     $owner = tableLayoutMember(WorkspaceRole::Member);
     $theirs = layoutFor($owner, ['name' => 'Team', 'is_shared' => true]);
