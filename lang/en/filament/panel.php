@@ -55,6 +55,7 @@ return [
             'delete_heading' => 'Delete ":name"?',
             'delete_description' => 'Members who use this layout keep what their table shows.',
             'saved' => '":name" saved',
+            'created' => '":name" saved as a new layout',
             'shared' => '":name" is shared with the workspace',
             'unshared' => '":name" is no longer shared',
             'name_required' => 'Give the layout a name.',

@@ -116,7 +116,8 @@ it('saves the current table as a new layout without widths and applies it', func
         ->set('tableSort', 'created_at:desc')
         ->call('updateResizableColumnWidth', 'created_at', '300')
         ->callAction('saveTableLayoutAs', ['name' => 'Hot leads'])
-        ->assertHasNoActionErrors();
+        ->assertHasNoActionErrors()
+        ->assertNotified('"Hot leads" saved as a new layout');
 
     $layout = TableLayout::query()->withoutGlobalScopes()->sole();
 

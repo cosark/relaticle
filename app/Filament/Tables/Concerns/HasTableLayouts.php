@@ -124,6 +124,8 @@ trait HasTableLayouts
                 $this->activeTableLayoutId = $layout->getKey();
                 $this->appliedTableLayoutHash = $this->currentTableState()->withoutWidths()->hash();
                 $this->visibleTableLayouts = null;
+
+                Notification::make()->success()->title(__('filament/panel.tables.layouts.created', ['name' => $layout->name]))->send();
             });
     }
 
