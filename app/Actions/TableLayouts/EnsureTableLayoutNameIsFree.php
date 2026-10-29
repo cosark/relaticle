@@ -7,6 +7,7 @@ namespace App\Actions\TableLayouts;
 use App\Enums\CrmEntity;
 use App\Models\TableLayout;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
 
 final readonly class EnsureTableLayoutNameIsFree
@@ -17,7 +18,7 @@ final readonly class EnsureTableLayoutNameIsFree
 
         $taken = TableLayout::query()
             ->named($owner, $workspaceId, $entity, $name)
-            ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->getKey()))
+            ->when($ignore, fn (Builder $query): Builder => $query->whereKeyNot($ignore->getKey()))
             ->exists();
 
         if ($name === '' || $taken) {
