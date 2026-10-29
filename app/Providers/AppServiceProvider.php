@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Console\Commands\MakeFilamentUserCommand;
+use App\Contracts\Entitlements;
 use App\Enums\CrmEntity;
 use App\Enums\EmailGrant;
 use App\Enums\Plan;
+use App\Features\Billing;
 use App\Filament\CustomFields\DateFieldType;
 use App\Filament\CustomFields\DateTimeFieldType;
 use App\Filament\CustomFields\DomainFieldType;
@@ -30,9 +32,11 @@ use App\Models\WorkspaceInvitation;
 use App\Notifications\Channels\InboxChannel;
 use App\Onboarding\ActivationSteps;
 use App\Services\Billing\HostedWorkspaceAccess;
+use App\Services\Billing\PlanEntitlements;
 use App\Services\DiscordService;
 use App\Services\DockerHubService;
 use App\Services\GitHubService;
+use App\Services\SelfHostedEntitlements;
 use App\Services\WorkspaceActivationFacts;
 use App\Support\ActivityLog\CurrentImport;
 use App\Support\ActivityLog\MergedActivityRenderer;
@@ -100,6 +104,7 @@ use Laravel\Cashier\Cashier;
 use Laravel\Passport\AccessToken as PassportAccessToken;
 use Laravel\Passport\ClientRepository as BaseClientRepository;
 use Laravel\Passport\Passport;
+use Laravel\Pennant\Feature;
 use Laravel\Sanctum\Sanctum;
 use League\CommonMark\Extension\Table\TableExtension;
 use Livewire\Livewire;
@@ -132,10 +137,10 @@ final class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         Date::use(CarbonImmutable::class);
-
         $this->app->bind(\Filament\Auth\Http\Responses\Contracts\LoginResponse::class, LoginResponse::class);
         $this->app->bind(\Filament\Actions\Exports\Models\Export::class, Export::class);
         $this->registerNotificationBindings();
+        $this->registerEntitlements();
 
         // Ink registers its public routes from packageBooted(), which runs after every
         // provider's register(). Read the config key App\Features\Blog resolves from
@@ -215,6 +220,13 @@ final class AppServiceProvider extends ServiceProvider
         $this->app->bind(NoticeOfEmailChangeRequest::class, \App\Notifications\Auth\NoticeOfEmailChangeRequest::class);
         $this->app->bind(DatabaseChannel::class, InboxChannel::class);
         $this->app->bind(ExportCompletion::class, CompleteExport::class);
+    }
+
+    private function registerEntitlements(): void
+    {
+        $this->app->bind(Entitlements::class, static fn (Application $app): Entitlements => Feature::active(Billing::class)
+            ? $app->make(PlanEntitlements::class)
+            : $app->make(SelfHostedEntitlements::class));
     }
 
     private function registerPassport(): void

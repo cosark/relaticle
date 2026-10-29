@@ -3,11 +3,13 @@
 declare(strict_types=1);
 
 use App\Enums\Plan;
+use App\Features\Billing;
 use App\Models\User;
 use App\Models\Workspace;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Laravel\Cashier\Subscription;
+use Laravel\Pennant\Feature;
 use Relaticle\Chat\Models\AiCreditBalance;
 use Relaticle\SystemAdmin\Actions\TransferWorkspaceBilling;
 use Relaticle\SystemAdmin\Exceptions\TransferRefused;
@@ -161,6 +163,8 @@ it('keeps the source on its sysadmin-assigned plan when it differs from the tran
 });
 
 it('grants the target the Pro allowance, drops the source to Free and keeps purchased credits', function (): void {
+    Feature::define(Billing::class, true);
+
     [$source, $target, $subscription] = transferPair();
 
     AiCreditBalance::query()

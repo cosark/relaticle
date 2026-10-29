@@ -3,14 +3,20 @@
 declare(strict_types=1);
 
 use App\Enums\Plan;
+use App\Features\Billing;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Date;
+use Laravel\Pennant\Feature;
 use Relaticle\Chat\Commands\ResetCreditsCommand;
 use Relaticle\Chat\Models\AiCreditBalance;
 use Relaticle\Chat\Services\CreditPeriodResolver;
 
 mutates(ResetCreditsCommand::class, CreditPeriodResolver::class);
+
+beforeEach(function (): void {
+    Feature::define(Billing::class, true);
+});
 
 it('resets credits for workspaces whose billing period has ended', function (): void {
     // Pinned mid-month: on the 31st, now()->subMonth() overflows forward (31 Jul -> 1 Jul),

@@ -159,6 +159,8 @@ it('keeps the workspace on Free while the subscription is incomplete', function 
 });
 
 it('upgrades the workspace to Pro and grants the allowance when the subscription activates', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     $workspace = stripeBillingWorkspace();
 
     sendStripeWebhook(stripeSubscriptionEvent($workspace, 'created', ['status' => 'incomplete']))->assertSuccessful();
@@ -201,6 +203,8 @@ it('keeps Pro pricing when the subscription switches between pro prices', functi
 });
 
 it('downgrades the workspace to Free when the subscription is deleted', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     $workspace = stripeBillingWorkspace();
 
     sendStripeWebhook(stripeSubscriptionEvent($workspace, 'created'))->assertSuccessful();
@@ -250,6 +254,8 @@ it('sends no ended email when an Enterprise grant outlives the subscription', fu
 });
 
 it('preserves a sysadmin-granted plan when an unrelated subscription ends', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     $workspace = stripeBillingWorkspace();
 
     sendStripeWebhook(stripeSubscriptionEvent($workspace, 'created'))->assertSuccessful();
@@ -271,6 +277,8 @@ it('preserves a sysadmin-granted plan when an unrelated subscription ends', func
 });
 
 it('preserves an Enterprise grant when an older Pro subscription sends an update', function (string $status): void {
+    Feature::define(BillingFeature::class, true);
+
     $workspace = stripeBillingWorkspace();
     sendStripeWebhook(stripeSubscriptionEvent($workspace, 'created'))->assertSuccessful();
     $workspace->refresh()->forceFill(['plan' => Plan::Enterprise])->save();
@@ -890,6 +898,8 @@ function proWorkspaceAwaitingManagedPayment(): Workspace
 }
 
 it('switches a managed plan on when its first invoice is paid', function (): void {
+    Feature::define(BillingFeature::class, true);
+
     $workspace = stripeBillingWorkspace();
     pendingManagedSubscription($workspace);
     stripeManagedSwitch($workspace);

@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use App\Enums\WorkspaceRole;
+use App\Features\Billing;
 use App\Models\User;
 use Laravel\Ai\Tools\Request;
+use Laravel\Pennant\Feature;
 use Relaticle\Chat\Models\AiCreditBalance;
 use Relaticle\Chat\Tools\GetCreditBalanceTool;
 
@@ -26,6 +28,8 @@ beforeEach(function (): void {
 });
 
 it('reports the remaining credits, the allowance, purchased credits and usage', function (): void {
+    Feature::define(Billing::class, true);
+
     $payload = json_decode(app(GetCreditBalanceTool::class)->handle(new Request([])), true);
 
     expect($payload['credits_remaining'])->toBe(137)

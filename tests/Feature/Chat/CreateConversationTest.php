@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Features\Billing;
 use App\Models\Company;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Laravel\Pennant\Feature;
 use Relaticle\Chat\Http\Controllers\ChatController;
 use Relaticle\Chat\Jobs\ProcessChatMessage;
 use Relaticle\Chat\Models\AgentConversation;
@@ -79,6 +81,9 @@ it('returns 422 when document text is empty', function (): void {
 });
 
 it('returns 402 on send when credit balance is insufficient', function (): void {
+    Feature::define(Billing::class, true);
+    $this->workspace->forceFill(['hosted_free_grandfathered_at' => now()])->save();
+
     Queue::fake();
 
     $createRes = $this->postJson(route('chat.conversations.create'), [

@@ -3,12 +3,14 @@
 declare(strict_types=1);
 
 use App\Enums\Plan;
+use App\Features\Billing;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Contracts\ConversationStore;
+use Laravel\Pennant\Feature;
 use Relaticle\Chat\Enums\AiCreditType;
 use Relaticle\Chat\Enums\MessageOrigin;
 use Relaticle\Chat\Jobs\ProcessChatMessage;
@@ -16,6 +18,10 @@ use Relaticle\Chat\Models\AiCreditBalance;
 use Relaticle\Chat\Models\AiCreditTransaction;
 use Relaticle\Chat\Services\CreditService;
 use Tests\Helpers\AnthropicSse;
+
+beforeEach(function (): void {
+    Feature::define(Billing::class, true);
+});
 
 it('refunds the reservation when a job fails without ever streaming', function (): void {
     $user = User::factory()->withPersonalWorkspace()->create();
@@ -203,6 +209,48 @@ it('settles a completed turn on the model it requested and the uncached input to
         ->and($settlement->credits_charged)->toBe(3)
         ->and($settlement->input_tokens)->toBe(40)
         ->and($settlement->output_tokens)->toBe(12);
+});
+
+it('writes no ledger rows when a self-hosted turn completes', function (): void {
+    Feature::define(Billing::class, false);
+
+    $user = User::factory()->withPersonalWorkspace()->create();
+    $workspace = $user->currentWorkspace;
+    $balanceBefore = 100;
+    AiCreditBalance::query()->where('workspace_id', $workspace->getKey())
+        ->update(['credits_remaining' => $balanceBefore, 'credits_used' => 0]);
+
+    DB::table('agent_conversations')->insert([
+        'id' => 'c-sh',
+        'participant_type' => 'user',
+        'participant_id' => $user->getKey(),
+        'workspace_id' => $workspace->getKey(),
+        'title' => 'Test conversation',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $ledgerRowsBefore = AiCreditTransaction::query()->where('workspace_id', $workspace->getKey())->count();
+
+    $turnId = '01TURNSELFHOSTEDAAAAAAAAAA';
+    resolve(CreditService::class)->reserveCredit(
+        $workspace,
+        reservationKey: "reserve-{$turnId}",
+        conversationId: 'c-sh',
+        userId: (string) $user->getKey(),
+    );
+
+    AnthropicSse::fake(AnthropicSse::reply('Your pipeline holds three deals.', 'claude-opus-5-20260301'));
+    Queue::fake();
+
+    (new ProcessChatMessage(
+        user: $user, workspace: $workspace, message: 'How is my pipeline?', conversationId: 'c-sh',
+        resolved: ['provider' => 'anthropic', 'model' => 'claude-opus-5', 'id' => 'claude-opus-5', 'source' => 'explicit'],
+        turnId: $turnId,
+    ))->handle(resolve(CreditService::class));
+
+    expect(AiCreditTransaction::query()->where('workspace_id', $workspace->getKey())->count())->toBe($ledgerRowsBefore)
+        ->and(AiCreditBalance::query()->where('workspace_id', $workspace->getKey())->value('credits_remaining'))->toBe($balanceBefore);
 });
 
 it('records a cancelled turn on the model it streamed and still charges one credit', function (): void {

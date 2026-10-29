@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Onboarding\StartSetupGreeting;
 use App\Actions\Task\CreateTask;
 use App\Enums\Plan;
+use App\Features\Billing;
 use App\Features\SetupConversation;
 use App\Models\Task;
 use App\Models\User;
@@ -44,6 +45,10 @@ use Relaticle\EmailIntegration\Models\Email;
 use Tests\Helpers\AnthropicSse;
 
 mutates(ProcessChatMessage::class);
+
+beforeEach(function (): void {
+    Feature::define(Billing::class, true);
+});
 
 /** @param array{provider: string|null, model: string|null, id: string|null, source: string} $resolved */
 function makeFailedTurnJob(User $user, string $conversationId, array $resolved = ['provider' => 'ollama', 'model' => 'qwen3:8b', 'id' => 'ollama', 'source' => 'auto']): ProcessChatMessage

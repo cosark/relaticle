@@ -2,15 +2,21 @@
 
 declare(strict_types=1);
 
+use App\Features\Billing;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Laravel\Pennant\Feature;
 use Relaticle\Chat\Enums\AiCreditType;
 use Relaticle\Chat\Models\AiCreditBalance;
 use Relaticle\Chat\Models\AiCreditTransaction;
 use Relaticle\Chat\Services\CreditService;
 
 mutates(CreditService::class);
+
+beforeEach(function (): void {
+    Feature::define(Billing::class, true);
+});
 
 it('reserves exactly once for the same reservation key', function (): void {
     $user = User::factory()->withPersonalWorkspace()->create();
