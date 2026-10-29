@@ -44,6 +44,16 @@ it('says AI credits are not metered when billing is off', function (): void {
         ->and($html)->not->toContain('300-credit monthly allowance');
 });
 
+it('offers every model without a plan gate when billing is off', function (): void {
+    Feature::define(BillingFeature::class, false);
+
+    $html = $this->get('/ai')->assertOk()->getContent();
+
+    expect($html)->toContain(__('Every model this installation offers is open to every workspace.'))
+        ->not->toContain('on a paid plan')
+        ->not->toContain('A paid plan additionally unlocks');
+});
+
 it('describes batch approval as per record, matching how the service resolves batches', function (): void {
     $html = $this->get('/ai')->assertOk()->getContent();
 

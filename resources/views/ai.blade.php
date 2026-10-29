@@ -1,5 +1,6 @@
 @php
     $assistantName = (string) config('chat.assistant_name');
+    $billingActive = \Laravel\Pennant\Feature::active(\App\Features\Billing::class);
 
     // offered(), not available(): this page describes what a plan includes, so it must
     // not change because this install is missing a provider key. It still drops models
@@ -16,7 +17,7 @@
     // runtime, and a tier with no model rendered " is free on every plan".
     $selfHostedNote = __('A self-hosted install supplies its own provider key, so you choose the model and pay the provider directly, or run a local one.');
 
-    $whichModelsAnswer = trim(implode(' ', array_filter([
+    $whichModelsAnswer = $billingActive ? trim(implode(' ', array_filter([
         $freeCloudModels === ''
             ? __('Every plan can use any self-hosted model you connect yourself.')
             : __(':freeModels on every plan.', ['freeModels' => $freeCloudModels]),
@@ -24,18 +25,17 @@
             ? ''
             : __('A paid plan additionally unlocks :paidModels, which cost more credits per reply.', ['paidModels' => $paidCloudModels]),
         $selfHostedNote,
-    ])));
+    ]))) : __('Every model this installation offers is open to every workspace. There is no plan gate.').' '.$selfHostedNote;
 
-    $modelChoiceLine = trim(implode(' ', array_filter([
+    $modelChoiceLine = $billingActive ? trim(implode(' ', array_filter([
         $freeCloudModels === ''
             ? __('Any self-hosted model you connect is free on every plan.')
             : __(':freeModels is free on every plan.', ['freeModels' => $freeCloudModels]),
         $paidCloudModels === ''
             ? ''
             : __('Switch to :paidModels on a paid plan when a harder question calls for it.', ['paidModels' => $paidCloudModels]),
-    ])));
+    ]))) : __('Every model this installation offers is open to every workspace.');
 
-    $billingActive = \Laravel\Pennant\Feature::active(\App\Features\Billing::class);
     $proCredits = number_format(\App\Enums\Plan::Pro->credits());
     $trialDays = \App\Models\Workspace::PRO_TRIAL_DAYS;
     $maxBatchSize = (int) config('chat.max_batch_size');
