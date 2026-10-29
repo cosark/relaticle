@@ -63,7 +63,7 @@ The feature fails, even if every test passes, when:
 | Delivery | Five phases, one PR each, each branched from `main` after the phase it needs has merged | One PR with three commits (#944); stacked branches |
 | Where the code lives | `app/`, in the folders listed under Code layout | A `packages/` module: the feature has no panel, routes or lifecycle of its own, and every part depends on `App` models and enums |
 | Row key | `entity`, a `CrmEntity` value | The list page class name (#944): a class rename would orphan every saved row |
-| Layouts control placement | Table toolbar, left of search | Page header beside Import / Export (#944's default) |
+| Layouts control placement | Table toolbar, after search and before the filter trigger | Left of search (the first build); page header beside Import / Export (#944's default) |
 | Sharing | Private layouts, plus share to the workspace; Admins may edit or delete a shared layout | Private only; shared but owner-only |
 | What a layout stores | Columns (visibility, order), sort, filters, search, column searches, grouping, page size, pins | Widths: they stay per member and per table |
 | Auto-save | Yes: the last state persists per member, and saved layouts sit on top | Saved layouts only |
@@ -238,11 +238,15 @@ with the workspace.
 ![The layouts menu in the table toolbar](assets/table-layouts/phase-3-layouts-menu.png)
 ![The layouts menu in dark mode](assets/table-layouts/phase-3-layouts-menu-dark.png)
 
-The control sits in the table toolbar, left of search, through
-`TablesRenderHook::TOOLBAR_START` scoped to the five pages. The menu lists the member's own
-layouts, then the layouts shared with the workspace (each with its owner's name), then the actions:
-Save, Save as new layout, Rename, Share with workspace, Set as my default, Reset, Delete layout. A
-star marks the member's default layout.
+The control sits in the table toolbar, after search and before the filter trigger, through
+`TablesRenderHook::TOOLBAR_SEARCH_AFTER` scoped to the five pages. The menu opens with "Standard
+layout", the table as Filament defines it, then the member's own layouts, then the layouts shared
+with the workspace (each with its owner's name). Under a heading carrying the applied layout's
+name come the actions on that layout: Rename, Share with workspace (or Stop sharing), Set as my
+default, Delete layout. Save lives only beside the trigger, where it appears once the layout is
+modified. Save as new layout closes the menu in a group of its own. A star marks the
+member's default layout. With no layout saved, the menu holds only Standard layout and Save as new
+layout. Sharing asks for confirmation first, because every member of the workspace sees the result.
 
 ![A changed layout reads "(modified)" and offers Revert and Save](assets/table-layouts/phase-3-layouts-modified.png)
 
@@ -252,20 +256,20 @@ Revert and Save appear beside it. The comparison ignores widths, since layouts d
 - Add `table_layouts` and the `active_layout_id` and `default_layout_id` columns on
   `table_preferences`.
 - Actions in `app/Actions/TableLayouts/`: `CreateTableLayout`, `UpdateTableLayout` (rename, share,
-  overwrite state), `DeleteTableLayout`, `SetDefaultTableLayout`. Each authorizes through the policy.
+  overwrite state), `DeleteTableLayout`, `SetDefaultTableLayout`, and `EnsureTableLayoutNameIsFree`,
+  which the first two share. Each authorizes through the policy.
 - `applySavedLayout()` on the trait follows the apply sequence below. The trait's save, save as
-  new, rename, share, set-default, reset and delete entry points each delegate to one of these
+  new, rename, share, set-default and delete entry points each delegate to one of these
   actions and write nothing themselves.
-- "Reset" returns the table to the member's default layout, or to the table's default state when
-  they have none, and clears the "(modified)" mark.
+- "Standard layout" returns the table to its default state and clears the active layout. There is
+  no Reset: the member's default layout is one click away in the same list.
 - All labels go through `__()` in `lang/en/filament/`.
 
 What a member sees on opening a table:
 
 1. Their last state always wins. They see exactly what they left, with "(modified)" when they
    had changed an applied layout.
-2. Their default layout applies only when they have no saved state for that table yet, and
-   after Reset.
+2. Their default layout applies only when they have no saved state for that table yet.
 3. With neither, the table's default state.
 
 When a shared layout changes under a member who has it applied or as their default:
