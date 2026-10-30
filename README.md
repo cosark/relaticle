@@ -75,6 +75,11 @@ composer lint
 
 See the [Self-Hosting Guide](https://relaticle.com/docs/self-hosting) for Docker and manual deployment instructions.
 
+# One-Click Deploy
+
+<a href="https://repocloud.io/details/Relaticle/"><img src="https://d16t0pc4846x52.cloudfront.net/deploylobe.svg" alt="Deploy on RepoCloud" height="42"></a>
+<a href="https://railway.com/deploy/relaticle"><img src="https://railway.com/button.svg" alt="Deploy on Railway" height="42"></a>
+
 # Internationalization
 
 Relaticle ships English-only in the main repository, but the codebase is fully i18n-ready. Self-host forks can drop a `lang/<locale>/` directory in place to translate the entire app. See [`docs/i18n.md`](docs/i18n.md) for the override workflow and CI guardrails.
